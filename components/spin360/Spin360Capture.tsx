@@ -18,6 +18,7 @@ import { CarSideGuide } from '../icons/guides/CarSideGuide';
 import { CarRearQuarterGuide } from '../icons/guides/CarRearQuarterGuide';
 import { CarFrontGuide } from '../icons/guides/CarFrontGuide';
 import { CarRearGuide } from '../icons/guides/CarRearGuide';
+import { WireframeGuide } from './WireframeGuide';
 
 interface Spin360CaptureProps {
   vehicleType: VehicleType;
@@ -378,6 +379,22 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
 
   const CurrentGuide = getGuideForAngle(targetAngle);
 
+  // Get guide name for current angle
+  const getGuideName = (angle: number) => {
+    const normalized = ((angle % 360) + 360) % 360;
+    
+    if (normalized >= 337.5 || normalized < 22.5) return 'Front View';
+    if (normalized >= 22.5 && normalized < 67.5) return 'Front Right Quarter';
+    if (normalized >= 67.5 && normalized < 112.5) return 'Right Side';
+    if (normalized >= 112.5 && normalized < 157.5) return 'Rear Right Quarter';
+    if (normalized >= 157.5 && normalized < 202.5) return 'Rear View';
+    if (normalized >= 202.5 && normalized < 247.5) return 'Rear Left Quarter';
+    if (normalized >= 247.5 && normalized < 292.5) return 'Left Side';
+    return 'Front Left Quarter';
+  };
+
+  const currentGuideName = getGuideName(targetAngle);
+
   // Format timer as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -403,11 +420,19 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
         {/* Canvas for capture (hidden) */}
         <canvas ref={canvasRef} className="hidden" />
         
-        {/* Vehicle Guide Overlay */}
-        {showGuides && CurrentGuide && (
+        {/* Wireframe Guide Overlay (Spyne AI Style) */}
+        {showGuides && (
+          <WireframeGuide 
+            isAligned={isAligned}
+            guideName={currentGuideName}
+          />
+        )}
+        
+        {/* Vehicle Guide Overlay (Optional - can be toggled separately) */}
+        {showGuides && CurrentGuide && guideOpacity > 0.3 && (
           <div 
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ opacity: guideOpacity }}
+            style={{ opacity: guideOpacity * 0.5 }}
           >
             <CurrentGuide 
               vehicleType={vehicleType}
