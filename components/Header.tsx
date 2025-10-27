@@ -6,9 +6,18 @@ import { CameraIcon } from './icons/CameraIcon';
 interface HeaderProps {
   viewMode?: 'projects' | 'queue';
   onViewChange?: (mode: 'projects' | 'queue') => void;
+  isProcessing?: boolean;
+  processingCount?: number;
+  totalCount?: number;
 }
 
-export const Header: React.FC<HeaderProps> = ({ viewMode = 'queue', onViewChange }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+  viewMode = 'queue', 
+  onViewChange,
+  isProcessing = false,
+  processingCount = 0,
+  totalCount = 0
+}) => {
   return (
     <header className="relative py-3 sm:py-6 border-b border-gray-700/30 bg-gradient-to-b from-gray-900 via-gray-900/95 to-gray-900/50 backdrop-blur-xl sticky top-0 z-20 shadow-2xl">
       <div className="container mx-auto px-3 sm:px-6">
@@ -50,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({ viewMode = 'queue', onViewChange
               </button>
               <button
                 onClick={() => onViewChange('queue')}
-                className={`px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
+                className={`px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                   viewMode === 'queue'
                     ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
@@ -66,6 +75,15 @@ export const Header: React.FC<HeaderProps> = ({ viewMode = 'queue', onViewChange
                     />
                   </svg>
                   <span className="hidden xs:inline">Queue</span>
+                  {/* Processing indicator badge */}
+                  {isProcessing && processingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 text-white text-[9px] font-bold items-center justify-center">
+                        {processingCount}
+                      </span>
+                    </span>
+                  )}
                 </div>
               </button>
             </div>

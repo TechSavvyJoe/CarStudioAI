@@ -93,6 +93,27 @@ const App = () => {
     pauseRef.current = isPaused;
   }, [isPaused]);
   
+  // Warn user before closing/refreshing page while processing
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Check if there are any images currently being processed
+      const hasProcessingImages = images.some(img => 
+        img.status === 'processing' || 
+        img.status === 'queued' || 
+        img.status === 'pending'
+      );
+      
+      if (hasProcessingImages && isProcessing && !isPaused) {
+        e.preventDefault();
+        e.returnValue = 'You have images still processing. If you leave now, processing will stop. Are you sure?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [images, isProcessing, isPaused]);
+  
   // Load initial state from IndexedDB on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -646,7 +667,13 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
-      <Header viewMode={viewMode} onViewChange={setViewMode} />
+      <Header 
+        viewMode={viewMode} 
+        onViewChange={setViewMode}
+        isProcessing={isProcessing}
+        processingCount={images.filter(img => img.status === 'processing' || img.status === 'queued').length}
+        totalCount={images.length}
+      />
       {loadError && (
         <div className="bg-red-900/20 border-t-2 border-b-2 border-red-600 px-4 py-3">
           <div className="container mx-auto flex items-start gap-3">
