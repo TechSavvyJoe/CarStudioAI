@@ -125,13 +125,19 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 **FOR EXTERIOR VEHICLE SHOTS (front, side, rear, 3/4 angles):**
 1. Classify as exterior shot - use dealership background
 2. Extract vehicle cleanly (include vehicle shadow from original)
-3. Place vehicle on dealership surface at EXACT original size and position
-4. Generate new shadow matching dealership sun angle and ambient occlusion
-5. Match vehicle lighting to dealership: adjust highlights, shadows, color cast
-6. Add subtle environmental reflections from dealership (building, sky) on vehicle paint
-7. Seamlessly blend - NO visible edges, halos, or color mismatches
-8. VERIFY: Vehicle looks like it was originally photographed at this dealership
-9. MAINTAIN: Exact framing - same vehicle size, position, and composition
+3. CRITICAL GROUND PLANE REPLACEMENT:
+   - Remove ALL original ground surface (pavement, concrete, asphalt, dirt)
+   - Replace COMPLETELY with dealership surface - no original floor should remain visible
+   - Ensure seamless transition between dealership surface and vehicle tires/bottom
+   - Ground surface must be 100% dealership background, 0% original floor
+4. Place vehicle on dealership surface at EXACT original size and position
+5. Generate new shadow matching dealership sun angle and ambient occlusion
+6. Match vehicle lighting to dealership: adjust highlights, shadows, color cast
+7. Add subtle environmental reflections from dealership (building, sky) on vehicle paint
+8. Seamlessly blend - NO visible edges, halos, or color mismatches
+9. VERIFY: Vehicle looks like it was originally photographed at this dealership
+10. VERIFY: NO original pavement/floor visible - 100% dealership ground surface
+11. MAINTAIN: Exact framing - same vehicle size, position, and composition
 
 **FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, controls, screens):**
 1. IGNORE dealership background completely - NOT applicable
@@ -139,22 +145,36 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 3. Identify windows/windshield showing exterior
 4. Replace ONLY exterior view through windows with pure white (#FFFFFF)
 5. Keep all interior elements untouched: dashboard, screens, seats, controls
-6. SCREENS/DISPLAYS: Keep digital screens intact - backup cameras, navigation, gauges
+6. SCREENS/DISPLAYS - CRITICAL PRESERVATION:
+   - Keep digital screens EXACTLY as photographed - no modifications
+   - Backup camera screens: preserve entire display intact
+   - Navigation displays: maintain as-is
+   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, and text
+   - Infotainment screens: keep intact, do NOT split or alter
+   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on screens
+   - DO NOT hallucinate or generate new screen content
+   - If screen shows text/symbols in original, keep them EXACTLY as they appear
 7. Enhance cabin lighting: bright, even, professional showroom quality
 8. Remove harsh shadows while maintaining depth
 9. CRITICAL: Interior shots use white window background, NOT dealership
 
-**FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine, door handle):**
+**FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle):**
 1. NOT an exterior vehicle shot - DO NOT use dealership background
 2. This is product photography - use professional studio backdrop
-3. Replace background with soft neutral gradient:
-   - For mechanical details (engine): Light gray (#D5D5D5) to medium gray (#888888)
-   - For design details (wheels, lights, badges): Soft bokeh effect with gray tones
-4. Keep detail at EXACT original size and framing - no zoom
-5. Professional studio lighting: clean, shadowless, brings out texture
-6. Remove any photographer reflections from chrome, glass, painted surfaces
-7. Enhance sharpness and clarity of the detail component
-8. CRITICAL: Detail shots get gray studio background, NOT dealership background
+3. CRITICAL: DO NOT GENERATE OR HALLUCINATE OBJECTS:
+   - If input shows an ENGINE BAY (under hood), keep the ACTUAL ENGINE visible
+   - DO NOT replace engine with a standalone engine rendering
+   - DO NOT add 3D rendered objects that weren't in original photo
+   - Keep the ACTUAL photographed component, just improve the background
+4. Replace background ONLY (behind the component) with soft neutral gradient:
+   - For mechanical details (engine bay): Light gray (#D5D5D5) to medium gray (#888888)
+   - For design details (wheels, lights, badges, grilles): Soft bokeh effect with gray tones
+5. Keep detail at EXACT original size and framing - no zoom, no recomposition
+6. Professional studio lighting: clean, shadowless, brings out texture
+7. Remove any photographer reflections from chrome, glass, painted surfaces
+8. Enhance sharpness and clarity of the ACTUAL component in the photo
+9. VERIFY: Output shows the SAME component from input, just with better background
+10. CRITICAL: Detail shots get gray studio background, NOT dealership background
 
 **QUALITY ASSURANCE CHECKLIST - VERIFY BEFORE OUTPUT:**
 ☐ Image sharpness equal to or better than input (NO blur or quality loss)
@@ -210,14 +230,20 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 
 **FOR EXTERIOR VEHICLE SHOTS (full vehicle - front, side, rear, 3/4 views):**
 1. Extract vehicle cleanly with all details preserved
-2. Place on pure white studio background (#FFFFFF)
-3. Vehicle MUST be at EXACT same size relative to frame as original
-4. Maintain EXACT same positioning - if centered, stay centered; if off-center, stay off-center
-5. Generate subtle, soft drop shadow (contact shadow only, 20-30% opacity, highly blurred)
-6. Professional studio lighting: bright, even, brings out vehicle lines and paint
-7. Remove all photographer/person reflections from every reflective surface
-8. Ensure paint looks clean and showroom-quality
-9. CRITICAL: Preserve exact framing - same vehicle size, position, composition as input
+2. CRITICAL GROUND PLANE REMOVAL:
+   - Remove ALL original ground surface (pavement, concrete, asphalt, dirt, grass)
+   - Floor beneath and around vehicle must be PURE WHITE (#FFFFFF)
+   - No traces of original pavement, parking lot markings, or ground texture
+   - Seamless blend between white background and vehicle tires/bottom
+3. Place on pure white studio background (#FFFFFF)
+4. Vehicle MUST be at EXACT same size relative to frame as original
+5. Maintain EXACT same positioning - if centered, stay centered; if off-center, stay off-center
+6. Generate subtle, soft drop shadow (contact shadow only, 20-30% opacity, highly blurred)
+7. Professional studio lighting: bright, even, brings out vehicle lines and paint
+8. Remove all photographer/person reflections from every reflective surface
+9. Ensure paint looks clean and showroom-quality
+10. VERIFY: NO original ground surface visible - complete white background
+11. CRITICAL: Preserve exact framing - same vehicle size, position, composition as input
 
 **FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, center console, controls, displays):**
 1. Keep ALL interior elements at EXACT same size, angle, and position
@@ -237,15 +263,22 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 **FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle, controls):**
 1. This is product photography - NOT a full vehicle shot
 2. Keep detail component at EXACT same size and position in frame - no zoom or reframe
-3. Replace background with professional studio backdrop:
+3. CRITICAL: DO NOT GENERATE OR HALLUCINATE OBJECTS:
+   - If input shows ENGINE BAY (under hood), keep the ACTUAL ENGINE visible
+   - DO NOT replace engine with standalone 3D rendered engine
+   - DO NOT add computer-generated objects not in original photo
+   - Keep the ACTUAL photographed component, just improve the background
+   - Output must show SAME component from input photo
+4. Replace background ONLY (area behind the component) with professional studio backdrop:
    - For mechanical details (engine bay): Soft gradient from light gray (#D8D8D8) to medium gray (#909090)
    - For design details (wheels, lights, badges, grilles): Soft bokeh-style blur with gray tones (#C0C0C0 to #808080)
    - Create depth-of-field effect with Gaussian blur on background
-4. Professional product photography lighting: clean, focused, shadowless, brings out texture and detail
-5. Remove any photographer/person reflections from chrome, glass, painted surfaces
-6. Enhance sharpness and clarity of the detail - make it look premium and high-end
-7. Keep the detail centered or positioned exactly as in original photo
-8. CRITICAL: Detail shots get gray gradient studio backdrop for professional product photo look
+5. Professional product photography lighting: clean, focused, shadowless, brings out texture and detail
+6. Remove any photographer/person reflections from chrome, glass, painted surfaces
+7. Enhance sharpness and clarity of the detail - make it look premium and high-end
+8. Keep the detail centered or positioned exactly as in original photo
+9. VERIFY: Output shows ACTUAL component from input, not a generated replacement
+10. CRITICAL: Detail shots get gray gradient studio backdrop for professional product photo look
 
 **QUALITY ASSURANCE CHECKLIST - VERIFY EACH BEFORE OUTPUT:**
 ☐ Image sharpness EQUAL TO OR BETTER than input (absolutely no quality loss or blur)
