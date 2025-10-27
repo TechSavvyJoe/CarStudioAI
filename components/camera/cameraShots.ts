@@ -18,6 +18,9 @@ import { CarDashboardGuide } from '../icons/guides/CarDashboardGuide';
 import { CarCenterConsoleGuide } from '../icons/guides/CarCenterConsoleGuide';
 import { CarSeatsGuide } from '../icons/guides/CarSeatsGuide';
 import { CarTrunkGuide } from '../icons/guides/CarTrunkGuide';
+import { CarEngineGuide } from '../icons/guides/CarEngineGuide';
+import { CarOdometerGuide } from '../icons/guides/CarOdometerGuide';
+import { CarInfotainmentGuide } from '../icons/guides/CarInfotainmentGuide';
 
 
 export interface Shot {
@@ -53,9 +56,12 @@ export const SHOT_LIST: Shot[] = [
 
   // == INTERIOR ==
   { name: 'Dashboard & Steering Wheel', description: 'From driver\'s seat, show the full dashboard.', category: 'Interior', overlay: CarDashboardGuide },
+  { name: 'Instrument Cluster & Odometer', description: 'Close-up of gauges, speedometer, and mileage display.', category: 'Interior', overlay: CarOdometerGuide },
+  { name: 'Infotainment Screen', description: 'Center touchscreen or head unit display.', category: 'Interior', overlay: CarInfotainmentGuide },
   { name: 'Center Console & Shifter', description: 'View of the gear shifter, cupholders, and controls.', category: 'Interior', overlay: CarCenterConsoleGuide },
   { name: 'Front Seats', description: 'From the back seat, capture both front seats.', category: 'Interior', overlay: CarSeatsGuide },
   { name: 'Rear Seats', description: 'From the front, show the rear seating area.', category: 'Interior', overlay: CarSeatsGuide },
   { name: 'Driver Door Panel', description: 'Show the inside of the driver\'s door.', category: 'Interior', overlay: CarDoorHandleGuide },
   { name: 'Trunk / Cargo Space', description: 'Open the trunk and show the available space.', category: 'Interior', overlay: CarTrunkGuide },
+  { name: 'Engine Bay', description: 'Open the hood and capture the engine compartment.', category: 'Interior', overlay: CarEngineGuide },
 ];

@@ -13,12 +13,7 @@ import {
   getNextUncapturedIndex,
   normalizeAngle,
 } from './angleHelper';
-import { CarFrontQuarterGuide } from '../icons/guides/CarFrontQuarterGuide';
-import { CarSideGuide } from '../icons/guides/CarSideGuide';
-import { CarRearQuarterGuide } from '../icons/guides/CarRearQuarterGuide';
-import { CarFrontGuide } from '../icons/guides/CarFrontGuide';
-import { CarRearGuide } from '../icons/guides/CarRearGuide';
-import { WireframeGuide } from './WireframeGuide';
+import { ARProgressRing } from './ARProgressRing';
 
 interface Spin360CaptureProps {
   vehicleType: VehicleType;
@@ -355,46 +350,6 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const progress = getProgressPercentage(capturedIndices.size);
   const isAligned = isWithinTolerance(currentAngle, targetAngle);
 
-  // Get appropriate guide overlay based on target angle
-  const getGuideForAngle = (angle: number) => {
-    const normalized = ((angle % 360) + 360) % 360;
-    
-    // Front: 315-45 degrees
-    if (normalized >= 315 || normalized < 45) {
-      if (normalized >= 337.5 || normalized < 22.5) return CarFrontGuide;
-      return normalized < 180 ? CarFrontQuarterGuide : CarFrontQuarterGuide;
-    }
-    // Right Side: 45-135 degrees
-    if (normalized >= 45 && normalized < 135) {
-      return normalized < 90 ? CarFrontQuarterGuide : CarSideGuide;
-    }
-    // Rear: 135-225 degrees
-    if (normalized >= 135 && normalized < 225) {
-      if (normalized >= 157.5 && normalized < 202.5) return CarRearGuide;
-      return normalized < 180 ? CarRearQuarterGuide : CarRearQuarterGuide;
-    }
-    // Left Side: 225-315 degrees
-    return normalized < 270 ? CarRearQuarterGuide : CarSideGuide;
-  };
-
-  const CurrentGuide = getGuideForAngle(targetAngle);
-
-  // Get guide name for current angle
-  const getGuideName = (angle: number) => {
-    const normalized = ((angle % 360) + 360) % 360;
-    
-    if (normalized >= 337.5 || normalized < 22.5) return 'Front View';
-    if (normalized >= 22.5 && normalized < 67.5) return 'Front Right Quarter';
-    if (normalized >= 67.5 && normalized < 112.5) return 'Right Side';
-    if (normalized >= 112.5 && normalized < 157.5) return 'Rear Right Quarter';
-    if (normalized >= 157.5 && normalized < 202.5) return 'Rear View';
-    if (normalized >= 202.5 && normalized < 247.5) return 'Rear Left Quarter';
-    if (normalized >= 247.5 && normalized < 292.5) return 'Left Side';
-    return 'Front Left Quarter';
-  };
-
-  const currentGuideName = getGuideName(targetAngle);
-
   // Format timer as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -420,25 +375,15 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
         {/* Canvas for capture (hidden) */}
         <canvas ref={canvasRef} className="hidden" />
         
-        {/* Wireframe Guide Overlay (Spyne AI Style) */}
+        {/* AR Progress Ring Overlay */}
         {showGuides && (
-          <WireframeGuide 
-            isAligned={isAligned}
-            guideName={currentGuideName}
+          <ARProgressRing 
+            capturedAngles={Array.from(capturedIndices).map(idx => getTargetAngle(idx))}
+            totalShots={TOTAL_ANGLES}
+            currentAngle={getTargetAngle(targetIndex)}
+            size={280}
+            strokeWidth={8}
           />
-        )}
-        
-        {/* Vehicle Guide Overlay (Optional - can be toggled separately) */}
-        {showGuides && CurrentGuide && guideOpacity > 0.3 && (
-          <div 
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ opacity: guideOpacity * 0.5 }}
-          >
-            <CurrentGuide 
-              vehicleType={vehicleType}
-              className="w-full h-full max-w-4xl max-h-screen text-blue-400"
-            />
-          </div>
         )}
         
         {/* Spyne AI Style Overlay */}
