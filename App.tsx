@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ImageCard } from './components/ImageCard';
-import { processImageBatch, retouchImage } from './services/geminiService';
+import { processImageBatch, retouchImage, analyzeImageContent } from './services/geminiService';
 import type { ImageFile, BatchHistoryEntry, DealershipBackground, VehicleType, Spin360Set } from './types';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { ErrorIcon } from './components/icons/ErrorIcon';
@@ -200,20 +200,45 @@ const App = () => {
   }, [updateAndPersistImages, dealershipBackground]);
 
   const handleFilesSelected = useCallback(async (files: FileList) => {
-    const newImageFiles: ImageFile[] = Array.from(files)
-      .filter(file => file.type.startsWith('image/'))
-      .map(file => ({
-        id: `${file.name}-${Date.now()}`,
-        originalFile: file,
-        originalUrl: URL.createObjectURL(file),
-        processedUrl: null,
-        status: 'pending',
-        error: null,
-      }));
+    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
+    
+    // Create image files with pending analysis
+    const newImageFiles: ImageFile[] = fileArray.map(file => ({
+      id: `${file.name}-${Date.now()}`,
+      originalFile: file,
+      originalUrl: URL.createObjectURL(file),
+      processedUrl: null,
+      status: 'pending',
+      error: null,
+      aiGeneratedName: undefined, // Will be filled after analysis
+    }));
 
     if (newImageFiles.length > 0) {
       setCurrentBatchId(null); // New upload means it's an unsaved batch
       updateAndPersistImages(prev => [...prev, ...newImageFiles]);
+      
+      // Analyze images in parallel to generate descriptive names
+      const analysisPromises = newImageFiles.map(async (imageFile, index) => {
+        try {
+          const descriptiveName = await analyzeImageContent(fileArray[index]);
+          // Update the specific image with its AI-generated name
+          updateAndPersistImages(prev => 
+            prev.map(img => 
+              img.id === imageFile.id 
+                ? { ...img, aiGeneratedName: descriptiveName }
+                : img
+            )
+          );
+        } catch (error) {
+          console.error(`Failed to analyze image ${imageFile.id}:`, error);
+        }
+      });
+      
+      // Don't wait for analysis to complete before starting processing
+      Promise.all(analysisPromises).catch(err => 
+        console.error('Some image analyses failed:', err)
+      );
+      
       await startProcessing(newImageFiles);
     }
   }, [updateAndPersistImages, startProcessing]);
@@ -227,10 +252,34 @@ const App = () => {
       processedUrl: null,
       status: 'pending',
       error: null,
+      aiGeneratedName: undefined, // Will be filled after analysis
     }));
 
     setCurrentBatchId(null); // New capture means it's an unsaved batch
     updateAndPersistImages(prev => [...prev, ...newImageFiles]);
+    
+    // Analyze captured images in parallel to generate descriptive names
+    const analysisPromises = newImageFiles.map(async (imageFile, index) => {
+      try {
+        const descriptiveName = await analyzeImageContent(capturedFiles[index]);
+        // Update the specific image with its AI-generated name
+        updateAndPersistImages(prev => 
+          prev.map(img => 
+            img.id === imageFile.id 
+              ? { ...img, aiGeneratedName: descriptiveName }
+              : img
+          )
+        );
+      } catch (error) {
+        console.error(`Failed to analyze captured image ${imageFile.id}:`, error);
+      }
+    });
+    
+    // Don't wait for analysis to complete before starting processing
+    Promise.all(analysisPromises).catch(err => 
+      console.error('Some image analyses failed:', err)
+    );
+    
     await startProcessing(newImageFiles);
   }, [updateAndPersistImages, startProcessing]);
 
@@ -239,6 +288,28 @@ const App = () => {
     
     // Add all captured 360 images to the queue
     updateAndPersistImages(prev => [...prev, ...spin360Set.images]);
+    
+    // Analyze 360 images to add angle-specific names
+    const analysisPromises = spin360Set.images.map(async (imageFile) => {
+      try {
+        const descriptiveName = await analyzeImageContent(imageFile.originalFile);
+        // Update with AI-generated name that includes angle info
+        updateAndPersistImages(prev => 
+          prev.map(img => 
+            img.id === imageFile.id 
+              ? { ...img, aiGeneratedName: `${descriptiveName}-${imageFile.spin360Angle}deg` }
+              : img
+          )
+        );
+      } catch (error) {
+        console.error(`Failed to analyze 360 image ${imageFile.id}:`, error);
+      }
+    });
+    
+    // Don't wait for analysis to complete
+    Promise.all(analysisPromises).catch(err => 
+      console.error('Some 360 image analyses failed:', err)
+    );
     
     // Start processing the 360 images
     await startProcessing(spin360Set.images);

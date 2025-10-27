@@ -100,7 +100,7 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({ image, index, onReproces
     <div 
       ref={cardRef} 
       className={`aspect-square bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 group transition-all duration-300 ease-in-out hover:shadow-blue-500/20 hover:border-blue-500/50 hover:scale-105 cursor-pointer ${justCompleted ? 'animate-flash-success' : ''}`}
-      title={image.error ? `${image.originalFile.name} - Error: ${image.error}` : image.originalFile.name}
+      title={image.error ? `${image.aiGeneratedName || image.originalFile.name} - Error: ${image.error}` : (image.aiGeneratedName || image.originalFile.name)}
       onClick={() => onOpenViewer(index)}
     >
       <div className="relative w-full h-full">
@@ -140,8 +140,8 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({ image, index, onReproces
 
         {/* --- BOTTOM INFO OVERLAY (Filename, status text) --- */}
         <div className="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/80 via-black/50 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <p className="text-xs font-medium text-gray-200 truncate" title={image.originalFile.name}>
-            {image.originalFile.name}
+          <p className="text-xs font-medium text-gray-200 truncate" title={image.aiGeneratedName || image.originalFile.name}>
+            {image.aiGeneratedName || image.originalFile.name}
           </p>
           {getStatusText()}
         </div>
@@ -161,7 +161,7 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({ image, index, onReproces
             {image.status === 'completed' && image.processedUrl && (
               <a
                 href={image.processedUrl}
-                download={`studio-${image.originalFile.name}`}
+                download={image.aiGeneratedName ? `${image.aiGeneratedName}.jpg` : `studio-${image.originalFile.name}`}
                 className="p-2 bg-gray-900/60 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
                 aria-label="Download processed image"
                 onClick={(e) => e.stopPropagation()}

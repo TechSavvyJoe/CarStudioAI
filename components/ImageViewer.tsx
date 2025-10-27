@@ -257,7 +257,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                 {image.status === 'completed' && image.processedUrl && (
                   <a
                     href={image.processedUrl}
-                    download={`studio-${image.originalFile.name}`}
+                    download={image.aiGeneratedName ? `${image.aiGeneratedName}.jpg` : `studio-${image.originalFile.name}`}
                     className="flex items-center gap-x-2 px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-full hover:bg-green-700 transition-colors"
                     aria-label="Download processed image"
                     onClick={(e) => e.stopPropagation()}

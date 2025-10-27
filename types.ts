@@ -21,6 +21,8 @@ export interface ImageFile {
   processedUrl: string | null;
   status: ImageStatus;
   error: string | null;
+  // AI-generated descriptive name based on image content
+  aiGeneratedName?: string;
   // 360 spin specific fields
   spin360Id?: string; // Links images that belong to same 360 spin
   spin360Index?: number; // Position in the 360 sequence (0-23)

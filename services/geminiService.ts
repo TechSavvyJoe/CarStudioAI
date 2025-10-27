@@ -81,6 +81,65 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
   return URL.createObjectURL(blob);
 };
 
+/**
+ * Analyzes an image to generate a descriptive filename based on the vehicle part/angle shown
+ * @param file - The image file to analyze
+ * @returns A descriptive name (e.g., "Front-Quarter-Passenger-Side", "Dashboard-Center-Console", etc.)
+ */
+export const analyzeImageContent = async (file: File): Promise<string> => {
+  try {
+    validateFile(file);
+    
+    const imagePart = await fileToGenerativePart(file);
+
+    const prompt = `Analyze this automotive photo and generate a concise, descriptive filename.
+
+INSTRUCTIONS:
+1. Identify the main vehicle part, angle, or feature shown
+2. Use professional automotive photography terminology
+3. Format: Use hyphens between words, capitalize each word
+4. Keep it SHORT (2-4 words maximum)
+5. Be SPECIFIC about the exact part/angle
+
+EXAMPLES:
+- "Front-Quarter-Right"
+- "Dashboard-Center"
+- "Rear-Taillight-Left"
+- "Wheel-Closeup"
+- "Interior-Seats"
+- "Engine-Bay"
+- "Side-Profile-Left"
+- "Grille-Detail"
+- "Door-Handle"
+- "Trunk-Open"
+
+RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the descriptive name).`;
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp',
+      contents: {
+        parts: [imagePart, { text: prompt }],
+      },
+    });
+
+    const response = result.candidates?.[0]?.content?.parts?.[0];
+    const text = response && 'text' in response ? response.text.trim() : '';
+    
+    // Clean up the response - remove any quotes, file extensions, or extra characters
+    const cleanName = text
+      .replace(/^["']|["']$/g, '') // Remove quotes
+      .replace(/\.(jpg|jpeg|png|gif|webp)$/i, '') // Remove file extensions
+      .replace(/[^a-zA-Z0-9-]/g, '-') // Replace invalid chars with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    
+    return cleanName || 'Vehicle-Photo';
+  } catch (error) {
+    console.error('Error analyzing image content:', error);
+    return 'Vehicle-Photo'; // Fallback name
+  }
+};
+
 // --- START: New consistent prompt generation logic ---
 
 const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): string => {
