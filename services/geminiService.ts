@@ -363,9 +363,45 @@ export const processImageBatch = async (
     }
   });
 
-  for (let i = 0; i < imageFiles.length; i++) {
-    const imageFile = imageFiles[i];
+  // Parallel processing configuration
+  const MAX_CONCURRENT = 3; // Process 3 images simultaneously
+  const RATE_LIMIT_RPM = 15; // Gemini free tier: 15 requests per minute
+  const MIN_DELAY_MS = (60 / RATE_LIMIT_RPM) * 1000; // 4000ms = 4 seconds
+  
+  // Track request timing to enforce rate limits
+  const requestTimestamps: number[] = [];
+  
+  const waitForRateLimit = async () => {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+    
+    // Remove timestamps older than 1 minute
+    while (requestTimestamps.length > 0 && requestTimestamps[0]! < oneMinuteAgo) {
+      requestTimestamps.shift();
+    }
+    
+    // If we've hit the rate limit, wait until the oldest request expires
+    if (requestTimestamps.length >= RATE_LIMIT_RPM) {
+      const oldestRequest = requestTimestamps[0]!;
+      const waitTime = (oldestRequest + 60000) - now;
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime + 100)); // +100ms buffer
+      }
+    }
+    
+    // Ensure minimum delay between requests
+    if (requestTimestamps.length > 0) {
+      const lastRequest = requestTimestamps[requestTimestamps.length - 1]!;
+      const timeSinceLastRequest = now - lastRequest;
+      if (timeSinceLastRequest < MIN_DELAY_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_DELAY_MS - timeSinceLastRequest));
+      }
+    }
+    
+    requestTimestamps.push(Date.now());
+  };
 
+  const processImage = async (imageFile: ImageFile) => {
     // --- PAUSE GATE ---
     while (pauseRef.current) {
       if(imageFile.status !== 'paused' && imageFile.status !== 'completed' && imageFile.status !== 'failed') {
@@ -375,19 +411,16 @@ export const processImageBatch = async (
     }
 
     if (imageFile.status === 'completed' || imageFile.status === 'failed') {
-      continue;
+      return;
     }
 
     let processed = false;
     let attempt = 0;
-    const maxAttempts = 10; // Increase retry attempts for rate limits
+    const maxAttempts = 10;
 
     while (!processed && attempt < maxAttempts) {
        // Re-check pause before each attempt
       while (pauseRef.current) {
-        // FIX: The redundant checks for 'completed' and 'failed' are removed.
-        // A prior `if` statement narrows the type of `imageFile.status` so it cannot be
-        // 'completed' or 'failed' here, which was causing a TypeScript compiler error.
         if(imageFile.status !== 'paused') {
           onUpdate({ ...imageFile, status: 'paused', error: 'Queue is paused.' });
         }
@@ -397,6 +430,9 @@ export const processImageBatch = async (
       onUpdate({ ...imageFile, status: 'processing', error: attempt > 0 ? `Retrying (attempt ${attempt + 1})...` : null });
       
       try {
+        // Wait for rate limit before making API call
+        await waitForRateLimit();
+        
         const prompt = generateConsistentPrompt(dealershipBackground);
         const carImagePart = await fileToGenerativePart(imageFile.originalFile);
         
@@ -405,7 +441,7 @@ export const processImageBatch = async (
         
         if (dealershipBackground) {
           const backgroundPart = await fileToGenerativePart(dealershipBackground.file);
-          parts.splice(1, 0, backgroundPart); // Insert background before the prompt
+          parts.splice(1, 0, backgroundPart);
         }
 
         const response = await ai.models.generateContent({
@@ -425,7 +461,7 @@ export const processImageBatch = async (
             URL.revokeObjectURL(imageFile.processedUrl);
           }
 
-          // Check pause state before marking complete to prevent race condition
+          // Check pause state before marking complete
           if (pauseRef.current) {
             onUpdate({ ...imageFile, status: 'paused', processedUrl: newProcessedUrl, error: 'Queue is paused.' });
             continue;
@@ -441,7 +477,6 @@ export const processImageBatch = async (
           if (finishReason === 'SAFETY') {
             specificError = 'Image blocked for safety. Try a different photo.';
           } else if (finishReason === 'NO_IMAGE') {
-            // NO_IMAGE can be transient - retry it
             specificError = 'Could not generate image. Retrying...';
             shouldRetry = true;
           } else if (finishReason && finishReason !== 'STOP') {
@@ -454,11 +489,10 @@ export const processImageBatch = async (
              shouldRetry = true;
           }
           
-          // If it's a retryable error and we haven't exhausted attempts, retry
           if (shouldRetry && attempt < maxAttempts - 1) {
             attempt++;
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
-            continue; // Go to next attempt
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            continue;
           }
           
           throw new Error(specificError);
@@ -466,24 +500,19 @@ export const processImageBatch = async (
       } catch (e: any) {
         console.error(`Failed to process image ${imageFile.originalFile.name}:`, e);
 
-        // --- START: Improved Error Detection ---
         let errorMessage = 'An unknown error occurred.';
         let isRateLimit = false;
         let isApiKeyInvalid = false;
 
-        // Step 1: Convert the entire error to a string for reliable keyword searching.
         const errorAsString = JSON.stringify(e);
         const lowerError = errorAsString.toLowerCase();
 
-        // Detect genuine API key issues (these should NOT be retried)
         isApiKeyInvalid =
           (lowerError.includes('api_key_invalid') && lowerError.includes('renew')) ||
           (e?.error?.code === 400 &&
            e?.error?.status === 'INVALID_ARGUMENT' &&
            (lowerError.includes('api key') && lowerError.includes('renew')));
 
-        // Detect rate limit issues (these SHOULD be retried with backoff)
-        // Note: "api key expired" without "renew" context might be a rate limit
         if (!isApiKeyInvalid) {
           isRateLimit = lowerError.includes('rate limit') ||
                         lowerError.includes('resource_exhausted') ||
@@ -493,7 +522,6 @@ export const processImageBatch = async (
                         (e?.error?.code === 400 && lowerError.includes('invalid_argument') && !lowerError.includes('api key'));
         }
 
-        // Step 2: Safely extract a user-friendly message directly from the error object.
         const potentialMessage = e?.error?.message || e?.message;
         if (typeof potentialMessage === 'string' && potentialMessage) {
             errorMessage = potentialMessage;
@@ -504,12 +532,10 @@ export const processImageBatch = async (
         } else {
             errorMessage = 'An API error occurred. See console for details.';
         }
-        // --- END: Improved Error Detection ---
 
-        // Only retry for rate limits, NOT for API key errors
         if (isRateLimit && attempt < maxAttempts - 1) {
           attempt++;
-          const baseDelay = 120000; // 2 minutes base delay for rate limits
+          const baseDelay = 120000; // 2 minutes
           const backoffDelay = baseDelay * Math.pow(1.5, attempt - 1);
           const delayInSeconds = Math.round(backoffDelay / 1000);
 
@@ -523,7 +549,6 @@ export const processImageBatch = async (
 
           await new Promise(resolve => setTimeout(resolve, backoffDelay));
         } else {
-          // Fail immediately for API key errors, or after exhausting retries for rate limits
           let finalErrorMessage = errorMessage;
           if (isRateLimit && attempt >= maxAttempts - 1) {
             finalErrorMessage = 'Rate limit exceeded after multiple retries. Wait 5 minutes, then click "Reprocess".';
@@ -536,17 +561,15 @@ export const processImageBatch = async (
             status: 'failed',
             error: finalErrorMessage,
           });
-          processed = true; // Exit loop, this image has permanently failed
+          processed = true;
         }
       }
     }
-    
-    // Proactive throttle: Wait AFTER processing one image, before starting the next.
-    if (i < imageFiles.length - 1) {
-       // Free tier is 15 RPM = 1 request every 4 seconds minimum
-       // Use 8 seconds to be extra safe and avoid any rate limit issues
-       const INTER_REQUEST_DELAY = 8000;
-       await new Promise(resolve => setTimeout(resolve, INTER_REQUEST_DELAY));
-    }
+  };
+
+  // Process images in parallel batches
+  for (let i = 0; i < imageFiles.length; i += MAX_CONCURRENT) {
+    const batch = imageFiles.slice(i, i + MAX_CONCURRENT);
+    await Promise.all(batch.map(imageFile => processImage(imageFile)));
   }
 };
