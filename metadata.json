@@ -1,0 +1,7 @@
+{
+  "name": "CarStudioAI",
+  "description": "Upload car photos to automatically replace the ground with a professional studio floor while keeping the original background intact.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
