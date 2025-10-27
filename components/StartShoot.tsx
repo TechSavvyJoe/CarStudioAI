@@ -31,20 +31,6 @@ export const StartShoot: React.FC<StartShootProps> = ({
       <p className="mt-4 max-w-2xl mx-auto text-lg leading-8 text-gray-300">
         Capture the perfect shots with our guided process, or upload your existing photos to get started.
       </p>
-      
-      {/* Dealership Background Upload Section */}
-      <div className="mt-8 max-w-2xl mx-auto">
-        <h3 className="text-sm font-semibold text-gray-300 mb-3 text-left">Optional: Upload Dealership Background</h3>
-        <BackgroundUpload
-          currentBackground={dealershipBackground}
-          onBackgroundSelected={onBackgroundSelected}
-          onBackgroundRemoved={onBackgroundRemoved}
-          isProcessing={isProcessing}
-        />
-        <p className="text-xs text-gray-400 mt-2 text-left">
-          Upload a photo of your dealership to composite vehicles onto your actual location (like the photo booth example).
-        </p>
-      </div>
 
       <div className="mt-8">
         <button
@@ -62,6 +48,20 @@ export const StartShoot: React.FC<StartShootProps> = ({
         <div className="flex-grow border-t border-gray-600"></div>
       </div>
       <ImageUpload onFilesSelected={onFilesSelected} isProcessing={isProcessing} />
+      
+      {/* Dealership Background Upload Section - Moved to bottom */}
+      <div className="mt-10 pt-8 border-t border-gray-700 max-w-2xl mx-auto">
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 text-left">Optional: Dealership Background</h3>
+        <BackgroundUpload
+          currentBackground={dealershipBackground}
+          onBackgroundSelected={onBackgroundSelected}
+          onBackgroundRemoved={onBackgroundRemoved}
+          isProcessing={isProcessing}
+        />
+        <p className="text-xs text-gray-400 mt-2 text-left">
+          Upload a photo of your dealership to composite vehicles onto your actual location.
+        </p>
+      </div>
     </div>
   );
 };
