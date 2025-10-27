@@ -31,6 +31,7 @@ import { CameraIcon } from './components/icons/CameraIcon';
 import { UploadIcon } from './components/icons/UploadIcon';
 import { HistoryButton } from './components/HistoryButton';
 import { BackgroundUpload } from './components/BackgroundUpload';
+import { ProjectsView } from './components/ProjectsView';
 
 // Type definition for JSZip library loaded from CDN
 // This is a simplified interface covering the methods we actually use
@@ -84,6 +85,7 @@ const App = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState<number | null>(null);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [dealershipBackground, setDealershipBackground] = useState<DealershipBackground | null>(null);
+  const [viewMode, setViewMode] = useState<'projects' | 'queue'>('projects'); // New: View switcher
   
   const pauseRef = useRef(isPaused);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -546,9 +548,25 @@ const App = () => {
           await deleteHistoryEntry(batchId);
           setBatchHistory(prev => prev.filter(b => b.id !== batchId));
           if (currentBatchId === batchId) {
-            setCurrentBatchId(null); // Unset if the deleted batch was the current one
+              setCurrentBatchId(null);
           }
       }
+  };
+
+  // New handlers for Projects view
+  const handleOpenProject = async (projectId: string) => {
+    await handleLoadBatch(projectId);
+    setViewMode('queue'); // Switch to queue view after opening project
+  };
+
+  const handleNewProject = () => {
+    if (images.length > 0) {
+      if (!window.confirm('This will clear your current queue. Make sure to save first! Continue?')) {
+        return;
+      }
+      handleClearAll();
+    }
+    setViewMode('queue'); // Switch to queue view for new project
   };
 
 
@@ -685,7 +703,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
-      <Header />
+      <Header viewMode={viewMode} onViewChange={setViewMode} />
       {loadError && (
         <div className="bg-red-900/20 border-t-2 border-b-2 border-red-600 px-4 py-3">
           <div className="container mx-auto flex items-start gap-3">
@@ -702,7 +720,18 @@ const App = () => {
           </div>
         </div>
       )}
-      <main className="container mx-auto px-4 py-8">
+      
+      {/* Conditional rendering based on view mode */}
+      {viewMode === 'projects' ? (
+        <ProjectsView
+          projects={batchHistory}
+          currentProjectId={currentBatchId}
+          onOpenProject={handleOpenProject}
+          onDeleteProject={handleDeleteBatch}
+          onNewProject={handleNewProject}
+        />
+      ) : (
+        <main className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-2xl shadow-2xl p-6 md:p-8 border border-gray-700">
           
           {images.length === 0 ? (
@@ -880,9 +909,15 @@ const App = () => {
           )}
         </div>
       </main>
-      <footer className="text-center py-6 text-gray-500 text-sm">
-        <p>Powered by Gemini. Built for professional results.</p>
-      </footer>
+      )}
+      
+      {/* Footer - only show in queue mode */}
+      {viewMode === 'queue' && (
+        <footer className="text-center py-6 text-gray-500 text-sm">
+          <p>Powered by Gemini. Built for professional results.</p>
+        </footer>
+      )}
+      
       <HistoryPanel
         isOpen={isHistoryPanelOpen}
         onClose={() => setIsHistoryPanelOpen(false)}
