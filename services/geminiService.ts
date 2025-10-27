@@ -87,11 +87,13 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
  * @returns A descriptive name (e.g., "Front-Quarter-Passenger-Side", "Dashboard-Center-Console", etc.)
  */
 export const analyzeImageContent = async (file: File): Promise<string> => {
+  const startTime = Date.now();
   try {
-    console.log('🔍 Analyzing image:', file.name);
+    console.log(`🔍 [${file.name}] Starting analysis...`);
     validateFile(file);
     
     const imagePart = await fileToGenerativePart(file);
+    console.log(`📦 [${file.name}] Image encoded (${Math.round(file.size / 1024)}KB)`);
 
     const prompt = `Analyze this automotive photo and generate a concise, descriptive filename.
 
@@ -116,18 +118,28 @@ EXAMPLES:
 
 RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the descriptive name).`;
 
-    console.log('📤 Sending analysis request to Gemini...');
-    const result = await ai.models.generateContent({
+    console.log(`📤 [${file.name}] Sending to Gemini API...`);
+    
+    // Add timeout wrapper
+    const timeoutMs = 30000; // 30 second timeout per image
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Analysis timeout (30s)')), timeoutMs)
+    );
+    
+    const apiPromise = ai.models.generateContent({
       model: 'gemini-2.0-flash-exp',
       contents: {
         parts: [imagePart, { text: prompt }],
       },
     });
 
+    const result = await Promise.race([apiPromise, timeoutPromise]);
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
     const response = result.candidates?.[0]?.content?.parts?.[0];
     const text = response && 'text' in response ? response.text.trim() : '';
     
-    console.log('📥 Gemini response:', text);
+    console.log(`📥 [${file.name}] Response received (${elapsedTime}s): "${text}"`);
     
     // Clean up the response - remove any quotes, file extensions, or extra characters
     const cleanName = text
@@ -137,10 +149,11 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
       .replace(/-+/g, '-') // Replace multiple hyphens with single
       .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
     
-    console.log('✅ AI-generated name:', cleanName || 'Vehicle-Photo');
+    console.log(`✅ [${file.name}] AI label: "${cleanName || 'Vehicle-Photo'}" (${elapsedTime}s total)`);
     return cleanName || 'Vehicle-Photo';
   } catch (error) {
-    console.error('❌ Error analyzing image content:', error);
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`❌ [${file.name}] Analysis failed after ${elapsedTime}s:`, error);
     return 'Vehicle-Photo'; // Fallback name
   }
 };
