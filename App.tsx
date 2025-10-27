@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ImageCard } from './components/ImageCard';
@@ -223,7 +222,9 @@ const App = () => {
       // Analyze images in parallel to generate descriptive names
       const analysisPromises = newImageFiles.map(async (imageFile, index) => {
         try {
+          console.log(`🏷️ Starting AI label analysis for: ${imageFile.originalFile.name}`);
           const descriptiveName = await analyzeImageContent(fileArray[index]);
+          console.log(`✅ AI label generated: ${descriptiveName} for ${imageFile.originalFile.name}`);
           // Update the specific image with its AI-generated name
           updateAndPersistImages(prev => 
             prev.map(img => 

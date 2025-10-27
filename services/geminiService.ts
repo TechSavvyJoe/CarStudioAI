@@ -88,6 +88,7 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
  */
 export const analyzeImageContent = async (file: File): Promise<string> => {
   try {
+    console.log('🔍 Analyzing image:', file.name);
     validateFile(file);
     
     const imagePart = await fileToGenerativePart(file);
@@ -115,6 +116,7 @@ EXAMPLES:
 
 RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the descriptive name).`;
 
+    console.log('📤 Sending analysis request to Gemini...');
     const result = await ai.models.generateContent({
       model: 'gemini-2.0-flash-exp',
       contents: {
@@ -125,6 +127,8 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
     const response = result.candidates?.[0]?.content?.parts?.[0];
     const text = response && 'text' in response ? response.text.trim() : '';
     
+    console.log('📥 Gemini response:', text);
+    
     // Clean up the response - remove any quotes, file extensions, or extra characters
     const cleanName = text
       .replace(/^["']|["']$/g, '') // Remove quotes
@@ -133,9 +137,10 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
       .replace(/-+/g, '-') // Replace multiple hyphens with single
       .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
     
+    console.log('✅ AI-generated name:', cleanName || 'Vehicle-Photo');
     return cleanName || 'Vehicle-Photo';
   } catch (error) {
-    console.error('Error analyzing image content:', error);
+    console.error('❌ Error analyzing image content:', error);
     return 'Vehicle-Photo'; // Fallback name
   }
 };

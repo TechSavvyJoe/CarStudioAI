@@ -140,8 +140,18 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({ image, index, onReproces
 
         {/* --- BOTTOM INFO OVERLAY (Filename, status text) - ALWAYS VISIBLE --- */}
         <div className="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
-          <p className="text-xs font-semibold text-white truncate" title={image.aiGeneratedName || image.originalFile.name}>
-            {image.aiGeneratedName || image.originalFile.name}
+          <p className="text-xs font-semibold text-white truncate flex items-center gap-1" title={image.aiGeneratedName || image.originalFile.name}>
+            {image.aiGeneratedName ? (
+              <>
+                <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                {image.aiGeneratedName}
+              </>
+            ) : (
+              <>
+                <span className="inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse"></span>
+                <span className="text-yellow-400">Analyzing...</span>
+              </>
+            )}
           </p>
           {getStatusText()}
         </div>
