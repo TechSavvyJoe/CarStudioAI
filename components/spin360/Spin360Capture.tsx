@@ -43,6 +43,9 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const [hasMotionSensors, setHasMotionSensors] = useState(false);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [hasLidar, setHasLidar] = useState(false);
+  const [shootTimer, setShootTimer] = useState<number>(0);
+  const [movementSpeed, setMovementSpeed] = useState<number>(0);
+  const [hasStabilization, setHasStabilization] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,8 +69,19 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
             facingMode: 'environment',
             width: { ideal: 1920 },
             height: { ideal: 1080 },
+            // Enable optical and digital stabilization if available
+            // @ts-ignore - Advanced constraint may not be in types
+            imageStabilization: true,
+            // @ts-ignore
+            opticalStabilization: true,
           },
         });
+        
+        // Check if stabilization is supported
+        const videoTrack = mediaStream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities?.() as any;
+        setHasStabilization(capabilities?.imageStabilization === true);
+        
         setStream(mediaStream);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -90,6 +104,38 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
       }
     };
   }, []);
+
+  // Shoot timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setShootTimer(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+
+  // Movement speed calculation based on angle change
+  useEffect(() => {
+    const lastAngleRef = { current: currentAngle, time: Date.now() };
+    
+    const speedInterval = setInterval(() => {
+      const now = Date.now();
+      const timeDiff = (now - lastAngleRef.time) / 1000; // seconds
+      const angleDiff = Math.abs(currentAngle - lastAngleRef.current);
+      
+      if (timeDiff > 0) {
+        const degreesPerSecond = angleDiff / timeDiff;
+        // Convert to speed multiplier (ideal is ~10-15 degrees/second = 1x)
+        const speedMultiplier = degreesPerSecond / 12;
+        setMovementSpeed(Number(speedMultiplier.toFixed(1)));
+      }
+      
+      lastAngleRef.current = currentAngle;
+      lastAngleRef.time = now;
+    }, 500);
+    
+    return () => clearInterval(speedInterval);
+  }, [currentAngle]);
 
   // Device orientation tracking for compass and tilt
   useEffect(() => {
@@ -296,6 +342,16 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const progress = getProgressPercentage(capturedIndices.size);
   const isAligned = isWithinTolerance(currentAngle, targetAngle);
 
+  // Format timer as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Get vehicle type display name
+  const vehicleTypeDisplay = vehicleType.charAt(0).toUpperCase() + vehicleType.slice(1);
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* Video Preview */}
@@ -311,245 +367,184 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
         {/* Canvas for capture (hidden) */}
         <canvas ref={canvasRef} className="hidden" />
         
-        {/* Compass Overlay */}
+        {/* Spyne AI Style Overlay */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Progress Ring */}
-          <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64">
-            {/* Background circle */}
-            <circle
-              cx="128"
-              cy="128"
-              r="120"
-              fill="none"
-              stroke="rgba(255,255,255,0.2)"
-              strokeWidth="4"
-            />
+          
+          {/* Top Left - Back Button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 left-4 w-12 h-12 rounded-full bg-black/50 backdrop-blur flex items-center justify-center pointer-events-auto hover:bg-black/70 transition-colors"
+            aria-label="Back"
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          {/* Top Center - Current Angle Progress */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full font-bold text-lg">
+            {Math.round(currentAngle)}°
+          </div>
+
+          {/* Top Right - Vehicle Type Badge */}
+          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur text-white px-4 py-2 rounded-lg font-semibold">
+            {vehicleTypeDisplay}
+          </div>
+
+          {/* Left Side - Shot Counter */}
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-3 text-white">
+              <div className="text-xs opacity-75 mb-1">[::]:</div>
+              <div className="text-3xl font-bold">{capturedIndices.size}</div>
+            </div>
             
-            {/* Progress arc */}
-            <circle
-              cx="128"
-              cy="128"
-              r="120"
-              fill="none"
-              stroke="#10b981"
-              strokeWidth="4"
-              strokeDasharray={`${(progress / 100) * 754} 754`}
-              strokeLinecap="round"
-              transform="rotate(-90 128 128)"
-            />
-            
-            {/* Angle markers */}
-            {Array.from({ length: TOTAL_ANGLES }).map((_, i) => {
-              const angle = getTargetAngle(i);
-              const rad = ((angle - 90) * Math.PI) / 180;
-              const x = 128 + 110 * Math.cos(rad);
-              const y = 128 + 110 * Math.sin(rad);
-              const isCaptured = capturedIndices.has(i);
-              const isTarget = i === targetIndex;
-              
-              return (
-                <circle
-                  key={i}
-                  cx={x}
-                  cy={y}
-                  r={isTarget ? 8 : 4}
-                  fill={isCaptured ? '#10b981' : isTarget ? '#ef4444' : 'rgba(255,255,255,0.5)'}
-                  stroke={isTarget ? '#fff' : 'none'}
-                  strokeWidth={isTarget ? 2 : 0}
-                />
-              );
-            })}
-            
-            {/* Current angle indicator */}
-            {hasCompass && (
-              <>
-                <line
-                  x1="128"
-                  y1="128"
-                  x2={128 + 100 * Math.sin((currentAngle * Math.PI) / 180)}
-                  y2={128 - 100 * Math.cos((currentAngle * Math.PI) / 180)}
-                  stroke={isAligned ? '#10b981' : '#fbbf24'}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <circle cx="128" cy="128" r="8" fill={isAligned ? '#10b981' : '#fbbf24'} />
-              </>
-            )}
-          </svg>
-          
-          {/* Level Indicator (Bubble Level) */}
-          {hasMotionSensors && (
-            <div className="absolute top-16 right-4 bg-black/70 backdrop-blur rounded-lg p-3 text-white">
-              <div className="text-xs font-semibold mb-2 text-center">LEVEL</div>
-              {/* Bubble level visualization */}
-              <div className="relative w-24 h-24 bg-gray-800 rounded-full border-2 border-gray-600">
-                {/* Crosshair */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="absolute w-full h-0.5 bg-gray-600" />
-                  <div className="absolute w-0.5 h-full bg-gray-600" />
-                  <div className="absolute w-8 h-8 rounded-full border-2 border-green-500" />
-                </div>
-                {/* Moving bubble based on tilt */}
-                <div 
-                  className={`absolute w-6 h-6 rounded-full transition-all ${
-                    isLevelWarning ? 'bg-red-500' : 'bg-green-400'
-                  }`}
-                  style={{
-                    left: `${50 + (tiltY / 30) * 50}%`, // gamma: -30 to +30 degrees
-                    top: `${50 - ((tiltX - 90) / 30) * 50}%`, // beta: 60 to 120 degrees (90 is vertical)
-                    transform: 'translate(-50%, -50%)',
-                    boxShadow: '0 0 10px rgba(255,255,255,0.5)'
-                  }}
-                />
-              </div>
-              {isLevelWarning && (
-                <div className="text-xs text-red-400 mt-2 text-center font-semibold">
-                  Keep phone vertical!
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Motion Stability Indicator */}
-          {hasMotionSensors && accelerationData && (
-            <div className="absolute top-56 right-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
-              <div className="text-xs font-semibold mb-1">STABILITY</div>
-              {(() => {
-                const totalAccel = Math.sqrt(
-                  accelerationData.x ** 2 + 
-                  accelerationData.y ** 2 + 
-                  accelerationData.z ** 2
-                );
-                const isStable = totalAccel < 2; // Threshold for "stable"
-                return (
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isStable ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                    <div className="text-xs">{isStable ? 'Stable' : 'Moving'}</div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-          
-          {/* GPS Status Indicator */}
-          {gpsLocation && (
-            <div className="absolute top-4 right-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <div className="text-xs font-semibold">GPS LOCKED</div>
-              </div>
-              <div className="text-[10px] opacity-75 mt-1">
-                {gpsLocation.lat.toFixed(6)}, {gpsLocation.lng.toFixed(6)}
-              </div>
-            </div>
-          )}
-          
-          {/* LiDAR Status Indicator */}
-          {hasLidar && (
-            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                <div className="text-xs font-semibold">LiDAR ACTIVE</div>
-              </div>
-              <div className="text-[10px] opacity-75 mt-1">
-                Enhanced depth sensing
-              </div>
-            </div>
-          )}
-          
-          {/* Walking Guidance Overlay */}
-          {hasCompass && (
-            <div className="absolute bottom-32 left-0 right-0 flex justify-center">
-              <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white">
-                <div className="text-sm font-semibold text-center">
-                  {(() => {
-                    const nextIndex = getNextUncapturedIndex(capturedIndices);
-                    if (nextIndex === null) return '✓ Complete!';
-                    
-                    const nextAngle = getTargetAngle(nextIndex);
-                    const diff = ((nextAngle - currentAngle + 540) % 360) - 180;
-                    const absDiff = Math.abs(diff);
-                    
-                    if (absDiff < 15) return '→ Hold steady ←';
-                    if (diff > 0) return `← Turn left ${absDiff.toFixed(0)}°`;
-                    return `Turn right ${absDiff.toFixed(0)}° →`;
-                  })()}
-                </div>
-                <div className="text-xs opacity-75 text-center mt-1">
-                  Keep phone vertical & walk smoothly
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Center guidance */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-            <div className={`text-2xl font-bold mb-2 ${isAligned ? 'text-green-400' : 'text-yellow-400'}`}>
-              {guidance}
-            </div>
-            {isAligned && autoCapture && (
-              <div className="text-green-400 animate-pulse">
-                Capturing...
+            {/* Stabilization Indicator */}
+            {hasStabilization && (
+              <div className="bg-blue-500/80 backdrop-blur rounded-full p-2" title="Stabilization Active">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9V5h2v4h4v2h-4v4H9v-4H5V9h4z" />
+                </svg>
               </div>
             )}
           </div>
-        </div>
-        
-        {/* Top Info Bar */}
-        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
-          <div className="flex items-center justify-between text-white">
+
+          {/* Right Side - Large Capture Button (Manual Mode) */}
+          {!autoCapture && (
             <button
-              onClick={onCancel}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              aria-label="Cancel 360 spin capture"
+              onClick={captureImage}
+              disabled={isCapturing}
+              className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-red-600 border-4 border-white shadow-2xl pointer-events-auto hover:bg-red-700 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center"
+              aria-label="Capture photo"
             >
-              <XIcon className="w-6 h-6" />
+              <div className="w-16 h-16 rounded-full border-2 border-white" />
             </button>
-            
-            <div className="text-center">
-              <div className="text-sm opacity-75">360° Spin Capture</div>
-              <div className="text-xl font-bold">{capturedIndices.size} / {TOTAL_ANGLES}</div>
-              <div className="text-xs opacity-75">{progress}% Complete</div>
+          )}
+
+          {/* Right Side - Auto Mode Indicator */}
+          {autoCapture && isAligned && (
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-red-600 border-4 border-white shadow-2xl animate-pulse flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-2 border-white" />
+            </div>
+          )}
+
+          {/* Bottom Right - Vehicle Icon and Timer */}
+          <div className="absolute bottom-24 right-6 flex flex-col items-center gap-3">
+            {/* Vehicle Type Icon */}
+            <div className="w-16 h-16 bg-black/50 backdrop-blur rounded-lg flex items-center justify-center">
+              <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" />
+              </svg>
             </div>
             
-            <div className="w-10" /> {/* Spacer for centering */}
+            {/* Timer */}
+            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white text-center">
+              <div className="text-lg font-bold font-mono">{formatTime(shootTimer)}</div>
+            </div>
           </div>
-        </div>
-        
-        {/* Bottom Controls */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-          <div className="flex items-center justify-center gap-6">
+
+          {/* Bottom Center - Warning Message */}
+          {shootTimer < 30 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 backdrop-blur rounded-full px-6 py-3 text-white">
+              <div className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              </div>
+              <div className="text-sm font-medium">Don't end your shoot before 30 seconds</div>
+            </div>
+          )}
+
+          {/* Bottom Left - Speed and Settings */}
+          <div className="absolute bottom-6 left-6 flex items-center gap-3">
+            {/* Movement Speed */}
+            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white text-center">
+              <div className="text-2xl font-bold">{movementSpeed.toFixed(1)}</div>
+              <div className="text-xs opacity-75">speed</div>
+            </div>
+            
             {/* Auto-capture toggle */}
             <button
               onClick={() => setAutoCapture(!autoCapture)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium transition-colors pointer-events-auto ${
                 autoCapture 
                   ? 'bg-green-600 text-white' 
-                  : 'bg-white/10 text-white'
+                  : 'bg-white/20 text-white'
               }`}
             >
-              Auto: {autoCapture ? 'ON' : 'OFF'}
+              {autoCapture ? '1x Auto' : 'Manual'}
             </button>
-            
-            {/* Manual capture button */}
-            {!autoCapture && (
-              <button
-                onClick={captureImage}
-                disabled={isCapturing}
-                className="w-16 h-16 rounded-full bg-red-600 border-4 border-white shadow-lg hover:bg-red-700 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center"
-                aria-label="Capture photo"
-              >
-                <CameraIcon className="w-8 h-8 text-white" />
-              </button>
-            )}
           </div>
-          
+
+          {/* Center - Guidance Circle (Simplified) */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <svg className="w-64 h-64">
+              {/* Background circle */}
+              <circle
+                cx="128"
+                cy="128"
+                r="120"
+                fill="none"
+                stroke="rgba(255,255,255,0.2)"
+                strokeWidth="2"
+              />
+              
+              {/* Progress arc */}
+              <circle
+                cx="128"
+                cy="128"
+                r="120"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="3"
+                strokeDasharray={`${(progress / 100) * 754} 754`}
+                strokeLinecap="round"
+                transform="rotate(-90 128 128)"
+              />
+              
+              {/* Angle markers (captured shots) */}
+              {Array.from({ length: TOTAL_ANGLES }).map((_, i) => {
+                const angle = getTargetAngle(i);
+                const rad = ((angle - 90) * Math.PI) / 180;
+                const x = 128 + 110 * Math.cos(rad);
+                const y = 128 + 110 * Math.sin(rad);
+                const isCaptured = capturedIndices.has(i);
+                
+                return (
+                  <circle
+                    key={i}
+                    cx={x}
+                    cy={y}
+                    r={isCaptured ? 6 : 3}
+                    fill={isCaptured ? '#10b981' : 'rgba(255,255,255,0.3)'}
+                  />
+                );
+              })}
+              
+              {/* Current heading indicator */}
+              {hasCompass && (
+                <>
+                  <line
+                    x1="128"
+                    y1="128"
+                    x2={128 + 100 * Math.sin((currentAngle * Math.PI) / 180)}
+                    y2={128 - 100 * Math.cos((currentAngle * Math.PI) / 180)}
+                    stroke={isAligned ? '#10b981' : '#fbbf24'}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="128" cy="128" r="6" fill={isAligned ? '#10b981' : '#fbbf24'} />
+                </>
+              )}
+            </svg>
+          </div>
+
+          {/* No Compass Warning */}
           {!hasCompass && (
-            <div className="mt-4 text-center text-yellow-400 text-sm">
-              ⚠️ Device compass not available. Rotate manually and capture at each marker.
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-white px-4 py-2 rounded-lg text-sm font-medium">
+              ⚠️ Compass unavailable - Manual capture mode
             </div>
           )}
+
         </div>
+        
       </div>
     </div>
   );
