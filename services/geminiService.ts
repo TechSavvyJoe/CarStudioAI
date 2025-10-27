@@ -86,10 +86,12 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
  * @param file - The image file to analyze
  * @returns A descriptive name (e.g., "Front-Quarter-Passenger-Side", "Dashboard-Center-Console", etc.)
  */
-export const analyzeImageContent = async (file: File): Promise<string> => {
+export const analyzeImageContent = async (file: File, retryCount = 0): Promise<string> => {
   const startTime = Date.now();
+  const maxRetries = 3;
+  
   try {
-    console.log(`🔍 [${file.name}] Starting analysis...`);
+    console.log(`🔍 [${file.name}] Starting analysis... (attempt ${retryCount + 1}/${maxRetries + 1})`);
     validateFile(file);
     
     const imagePart = await fileToGenerativePart(file);
@@ -151,8 +153,29 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
     
     console.log(`✅ [${file.name}] AI label: "${cleanName || 'Vehicle-Photo'}" (${elapsedTime}s total)`);
     return cleanName || 'Vehicle-Photo';
-  } catch (error) {
+  } catch (error: any) {
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    
+    // Check if it's a rate limit error (429)
+    const isRateLimit = error?.message?.includes('429') || error?.message?.includes('quota');
+    
+    if (isRateLimit && retryCount < maxRetries) {
+      // Extract retry delay from error (API tells us how long to wait)
+      const retryMatch = error?.message?.match(/"retryDelay":"(\d+)s"/);
+      const suggestedDelay = retryMatch ? parseInt(retryMatch[1]) : 0;
+      
+      // Use suggested delay or exponential backoff (10s, 20s, 40s)
+      const delaySeconds = suggestedDelay || Math.pow(2, retryCount) * 10;
+      
+      console.warn(`⏳ [${file.name}] Rate limit hit. Retrying in ${delaySeconds}s... (${retryCount + 1}/${maxRetries})`);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+      
+      // Retry recursively
+      return analyzeImageContent(file, retryCount + 1);
+    }
+    
     console.error(`❌ [${file.name}] Analysis failed after ${elapsedTime}s:`, error);
     return 'Vehicle-Photo'; // Fallback name
   }
