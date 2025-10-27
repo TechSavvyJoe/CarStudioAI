@@ -2,17 +2,17 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { ImageFile, DealershipBackground } from '../types';
 
-// Validate API key exists
-const apiKey = process.env.API_KEY;
+// Use import.meta.env for Vite projects (not process.env)
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 // Debug logging
 const keyLength = apiKey?.length || 0;
 const keyPreview = apiKey ? `${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 5)}` : 'MISSING';
 
 if (!apiKey || apiKey.trim() === '') {
-  console.error('❌ CRITICAL: API_KEY is not set! This will fail.');
-  console.error('   Expected: process.env.API_KEY to contain a valid Gemini API key');
-  console.error('   Please check your .env.local file has: GEMINI_API_KEY=AIza...');
+  console.error('❌ CRITICAL: VITE_GEMINI_API_KEY is not set! This will fail.');
+  console.error('   Expected: import.meta.env.VITE_GEMINI_API_KEY to contain a valid Gemini API key');
+  console.error('   Please check your .env.local file has: VITE_GEMINI_API_KEY=AIza...');
 } else {
   console.log(`✓ API Key loaded (${keyLength} chars): ${keyPreview}`);
 }
