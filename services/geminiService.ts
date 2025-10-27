@@ -232,11 +232,15 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 **FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle):**
 1. NOT an exterior vehicle shot - DO NOT use dealership background
 2. This is product photography - use professional studio backdrop
-3. CRITICAL: DO NOT GENERATE OR HALLUCINATE OBJECTS:
-   - If input shows an ENGINE BAY (under hood), keep the ACTUAL ENGINE visible
-   - DO NOT replace engine with a standalone engine rendering
-   - DO NOT add 3D rendered objects that weren't in original photo
-   - Keep the ACTUAL photographed component, just improve the background
+3. CRITICAL - ENGINE BAY SHOTS MUST PRESERVE ACTUAL ENGINE:
+   - If input shows ENGINE BAY (open hood with engine visible), you MUST keep the ACTUAL photographed engine
+   - DO NOT replace the real engine with a 3D rendered/generated engine image
+   - DO NOT create a floating standalone engine render
+   - DO NOT hallucinate or generate engine components not in the original photo
+   - Keep EVERY component visible in the original engine bay photo (belts, hoses, covers, fluids, etc.)
+   - The engine must remain under the hood as photographed, not extracted or replaced
+   - Only change the BACKGROUND behind/around the engine bay, never the engine itself
+   - Think: "I'm only improving the background, the engine stays exactly as photographed"
 4. Replace background ONLY (behind the component) with soft neutral gradient:
    - For mechanical details (engine bay): Light gray (#D5D5D5) to medium gray (#888888)
    - For design details (wheels, lights, badges, grilles): Soft bokeh effect with gray tones
@@ -245,7 +249,8 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 7. Remove any photographer reflections from chrome, glass, painted surfaces
 8. Enhance sharpness and clarity of the ACTUAL component in the photo
 9. VERIFY: Output shows the SAME component from input, just with better background
-10. CRITICAL: Detail shots get gray studio background, NOT dealership background
+10. VERIFY ENGINE BAY: If input had engine bay, output must show same engine bay with only background improved
+11. CRITICAL: Detail shots get gray studio background, NOT dealership background
 
 **QUALITY ASSURANCE CHECKLIST - VERIFY BEFORE OUTPUT:**
 ☐ Image sharpness equal to or better than input (NO blur or quality loss)
@@ -347,12 +352,15 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 **FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle, controls):**
 1. This is product photography - NOT a full vehicle shot
 2. Keep detail component at EXACT same size and position in frame - no zoom or reframe
-3. CRITICAL: DO NOT GENERATE OR HALLUCINATE OBJECTS:
-   - If input shows ENGINE BAY (under hood), keep the ACTUAL ENGINE visible
-   - DO NOT replace engine with standalone 3D rendered engine
-   - DO NOT add computer-generated objects not in original photo
-   - Keep the ACTUAL photographed component, just improve the background
-   - Output must show SAME component from input photo
+3. CRITICAL - ENGINE BAY SHOTS MUST PRESERVE ACTUAL ENGINE:
+   - If input shows ENGINE BAY (open hood with engine visible), you MUST keep the ACTUAL photographed engine
+   - DO NOT replace the real engine with a 3D rendered/generated engine image
+   - DO NOT create a floating standalone engine render
+   - DO NOT hallucinate or generate engine components not in the original photo
+   - Keep EVERY component visible in the original engine bay photo
+   - The engine must remain under the hood as photographed, not extracted or replaced
+   - Only change the BACKGROUND behind/around the engine bay, never the engine itself
+   - Think: "I'm only improving the background, the engine stays exactly as photographed"
 4. Replace background ONLY (area behind the component) with professional studio backdrop:
    - For mechanical details (engine bay): Soft gradient from light gray (#D8D8D8) to medium gray (#909090)
    - For design details (wheels, lights, badges, grilles): Soft bokeh-style blur with gray tones (#C0C0C0 to #808080)
@@ -362,7 +370,8 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 7. Enhance sharpness and clarity of the detail - make it look premium and high-end
 8. Keep the detail centered or positioned exactly as in original photo
 9. VERIFY: Output shows ACTUAL component from input, not a generated replacement
-10. CRITICAL: Detail shots get gray gradient studio backdrop for professional product photo look
+10. VERIFY ENGINE BAY: If input had engine bay, output must show same engine bay with only background improved
+11. CRITICAL: Detail shots get gray gradient studio backdrop for professional product photo look
 
 **QUALITY ASSURANCE CHECKLIST - VERIFY EACH BEFORE OUTPUT:**
 ☐ Image sharpness EQUAL TO OR BETTER than input (absolutely no quality loss or blur)

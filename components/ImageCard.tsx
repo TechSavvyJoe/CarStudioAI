@@ -138,9 +138,9 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({ image, index, onReproces
           </div>
         )}
 
-        {/* --- BOTTOM INFO OVERLAY (Filename, status text) --- */}
-        <div className="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/80 via-black/50 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <p className="text-xs font-medium text-gray-200 truncate" title={image.aiGeneratedName || image.originalFile.name}>
+        {/* --- BOTTOM INFO OVERLAY (Filename, status text) - ALWAYS VISIBLE --- */}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+          <p className="text-xs font-semibold text-white truncate" title={image.aiGeneratedName || image.originalFile.name}>
             {image.aiGeneratedName || image.originalFile.name}
           </p>
           {getStatusText()}
