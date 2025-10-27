@@ -569,16 +569,28 @@ export const processImageBatch = async (
         
         const promptWithFilenameRequest = `${prompt}
 
-**IMPORTANT - ALSO PROVIDE FILENAME:**
-After processing the image, also analyze what vehicle part/angle is shown and provide a concise descriptive filename.
-Rules for filename:
+**CRITICAL - OUTPUT FORMAT:**
+After processing the image, you MUST also output ONLY a short filename on a single line.
+
+FILENAME REQUIREMENTS:
+- OUTPUT FORMAT: Just the filename, nothing else. NO sentences, NO descriptions, NO extra words.
+- CORRECT: "Front-Quarter-Driver-Side"
+- WRONG: "This looks like a pretty standard red minivan. Front-Quarter-Driver-Side"
+- WRONG: "The image shows the interior... Interior-Second-Row-Passenger-Side-Open"
 - Use hyphens between words (e.g., "Front-Quarter-Passenger-Side")
-- Be specific about the part or angle (e.g., "Dashboard-Center-Console", "Rear-Tailgate-Open", "Wheel-Alloy-Front-Driver")
+- Be specific about the part or angle shown
 - Keep it under 50 characters
 - Use professional automotive terminology
-- Examples: "Front-Quarter-View", "Interior-Dashboard", "Headlight-LED-Driver", "Engine-Bay-V8", "Trunk-Cargo-Open"
 
-Return the filename on a new line after processing the image.`;
+EXAMPLES OF CORRECT OUTPUT:
+- "Front-Quarter-View"
+- "Interior-Dashboard"
+- "Rear-Driver-Side-View"
+- "Engine-Bay-V8"
+- "Trunk-Cargo-Open"
+- "Interior-Second-Row-Passenger-Side"
+
+REMINDER: Output ONLY the filename. Do NOT include any description or explanation before the filename.`;
 
         const carImagePart = await fileToGenerativePart(imageFile.originalFile);
         
@@ -611,8 +623,17 @@ Return the filename on a new line after processing the image.`;
           }
           if ('text' in part && part.text) {
             // Extract filename from text response
-            const text = part.text.trim();
+            let text = part.text.trim();
             console.log(`📝 [${imageFile.originalFile.name}] Raw AI text response: "${text}"`);
+            
+            // If AI returned a sentence with the filename at the end, extract just the filename
+            // Pattern: Look for the last hyphenated phrase (e.g., "Some description. Rear-Driver-Side-View")
+            const filenameMatch = text.match(/([A-Z][a-zA-Z0-9]*(?:-[A-Z][a-zA-Z0-9]*)+)(?:\s*$|"|\))/);
+            if (filenameMatch) {
+              text = filenameMatch[1]; // Use the matched filename
+              console.log(`🎯 [${imageFile.originalFile.name}] Extracted filename: "${text}"`);
+            }
+            
             // Clean up the AI-generated name (remove quotes, extra spaces, etc.)
             aiGeneratedName = text
               .replace(/^["']|["']$/g, '')
