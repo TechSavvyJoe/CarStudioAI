@@ -732,8 +732,8 @@ const App = () => {
           onNewProject={handleNewProject}
         />
       ) : (
-        <main className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-2xl shadow-2xl p-6 md:p-8 border border-gray-700">
+        <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border border-gray-700">
           
           {images.length === 0 ? (
             <StartShoot 
@@ -797,58 +797,62 @@ const App = () => {
                     />
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-2"
+                      className="px-3 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-1.5 sm:gap-x-2 text-sm sm:text-base"
                       disabled={isProcessing || isDownloading}
                       aria-label="Upload more photos"
                     >
-                      <UploadIcon className="w-5 h-5" />
-                      <span>Upload More</span>
+                      <UploadIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden xs:inline">Upload More</span>
+                      <span className="xs:hidden">Upload</span>
                     </button>
                     <button
                       onClick={() => setIsCameraOpen(true)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-2"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-1.5 sm:gap-x-2 text-sm sm:text-base"
                       disabled={isProcessing || isDownloading}
                       aria-label="Add more photos with camera"
                     >
-                      <CameraIcon className="w-5 h-5" />
-                      <span>Use Camera</span>
+                      <CameraIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden xs:inline">Use Camera</span>
+                      <span className="xs:hidden">Camera</span>
                     </button>
                     <button
                       onClick={handleTogglePause}
-                      className={`px-4 py-2 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-2 ${
+                      className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-1.5 sm:gap-x-2 text-sm sm:text-base ${
                         isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-600 hover:bg-yellow-700'
                       }`}
                       disabled={(!isProcessing && images.length === 0) || isDownloading}
                       aria-label={isPaused ? 'Resume queue processing' : 'Pause queue processing'}
                     >
-                      {isPaused ? <PlayIcon className="w-5 h-5" /> : <PauseIcon className="w-5 h-5" />}
-                      <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                      {isPaused ? <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <PauseIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      <span className="hidden xs:inline">{isPaused ? 'Resume' : 'Pause'}</span>
                     </button>
                     <button
                       onClick={handleDownloadAll}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-2 w-36 justify-center"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center gap-x-1.5 sm:gap-x-2 text-sm sm:text-base min-w-[90px] sm:w-36 justify-center"
                       disabled={isProcessing || isDownloading}
                       aria-label="Download all processed images as a zip file"
                     >
                       {isDownloading ? (
                         <>
-                          <Spinner className="w-5 h-5" />
-                          <span>Zipping...</span>
+                          <Spinner className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <span className="hidden xs:inline">Zipping...</span>
                         </>
                       ) : (
                         <>
-                          <DownloadIcon className="w-5 h-5" />
-                          <span>Download All</span>
+                          <DownloadIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <span className="hidden xs:inline">Download All</span>
+                          <span className="xs:hidden">All</span>
                         </>
                       )}
                     </button>
                     <button
                       onClick={handleClearAll}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                      className="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed text-sm sm:text-base"
                       disabled={isProcessing || isDownloading}
                       aria-label="Clear all images from the queue"
                     >
-                      Clear All
+                      <span className="hidden xs:inline">Clear All</span>
+                      <span className="xs:hidden">Clear</span>
                     </button>
                   </div>
                   {isDownloading && (

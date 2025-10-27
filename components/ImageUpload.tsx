@@ -61,7 +61,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onFilesSelected, isPro
     <div className={`text-center ${disabledClasses}`}>
       <label
         htmlFor="file-upload"
-        className={`relative block w-full transform rounded-lg border-2 ${dragDropClasses} p-12 transition-all duration-300 ease-in-out ${isProcessing ? '' : 'cursor-pointer'} ${isDragging ? 'scale-105' : 'scale-100'}`}
+        className={`relative block w-full transform rounded-lg border-2 ${dragDropClasses} p-6 sm:p-12 transition-all duration-300 ease-in-out ${isProcessing ? '' : 'cursor-pointer'} ${isDragging ? 'scale-105' : 'scale-100'}`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -69,11 +69,11 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onFilesSelected, isPro
       >
         <div className="flex flex-col items-center">
           {/* Icon animates during drag */}
-          <UploadIcon className={`mx-auto h-12 w-12 transition-all duration-300 ${isDragging ? 'text-blue-400 scale-110 -translate-y-1' : 'text-gray-400'}`} />
+          <UploadIcon className={`mx-auto h-10 w-10 sm:h-12 sm:w-12 transition-all duration-300 ${isDragging ? 'text-blue-400 scale-110 -translate-y-1' : 'text-gray-400'}`} />
           
           {/* Text changes during drag */}
           {isDragging ? (
-            <span className="mt-4 block text-lg font-semibold text-blue-300">
+            <span className="mt-3 sm:mt-4 block text-base sm:text-lg font-semibold text-blue-300">
               Release to upload
             </span>
           ) : (
