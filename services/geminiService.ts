@@ -676,6 +676,7 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
           });
           processed = true;
         } else {
+          // No image was returned - this is an actual error
           const finishReason = response.candidates?.[0]?.finishReason;
           let specificError = 'An unknown issue occurred.';
           let shouldRetry = false;
@@ -688,11 +689,10 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
           } else if (finishReason && finishReason !== 'STOP') {
             specificError = `Processing stopped: ${finishReason}. Retrying...`;
             shouldRetry = true;
-          } else if (response.text?.trim()) {
-            specificError = response.text.trim();
           } else {
-             specificError = 'No image data returned. Retrying...';
-             shouldRetry = true;
+            // Don't use response.text as it might contain the filename we extracted
+            specificError = 'No image data returned. Retrying...';
+            shouldRetry = true;
           }
           
           if (shouldRetry && attempt < maxAttempts - 1) {
