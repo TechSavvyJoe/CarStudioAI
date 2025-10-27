@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Header } from './components/Header';
 import { ImageCard } from './components/ImageCard';
 import { processImageBatch, retouchImage } from './services/geminiService';
-import type { ImageFile, BatchHistoryEntry, DealershipBackground } from './types';
+import type { ImageFile, BatchHistoryEntry, DealershipBackground, VehicleType, Spin360Set } from './types';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { ErrorIcon } from './components/icons/ErrorIcon';
 import { Spinner } from './components/Spinner';
@@ -24,6 +24,7 @@ import {
 } from './utils/db';
 import { HistoryPanel } from './components/HistoryPanel';
 import { CameraCapture } from './components/camera/CameraCapture';
+import { Spin360Capture } from './components/spin360/Spin360Capture';
 import { ImageViewer } from './components/ImageViewer';
 import { StartShoot } from './components/StartShoot';
 import { CameraIcon } from './components/icons/CameraIcon';
@@ -77,6 +78,8 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [is360CameraOpen, setIs360CameraOpen] = useState(false);
+  const [selected360VehicleType, setSelected360VehicleType] = useState<VehicleType>('sedan');
   const [currentImageIndex, setCurrentImageIndex] = useState<number | null>(null);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [dealershipBackground, setDealershipBackground] = useState<DealershipBackground | null>(null);
@@ -229,6 +232,16 @@ const App = () => {
     setCurrentBatchId(null); // New capture means it's an unsaved batch
     updateAndPersistImages(prev => [...prev, ...newImageFiles]);
     await startProcessing(newImageFiles);
+  }, [updateAndPersistImages, startProcessing]);
+
+  const handle360Complete = useCallback(async (spin360Set: Spin360Set) => {
+    setIs360CameraOpen(false);
+    
+    // Add all captured 360 images to the queue
+    updateAndPersistImages(prev => [...prev, ...spin360Set.images]);
+    
+    // Start processing the 360 images
+    await startProcessing(spin360Set.images);
   }, [updateAndPersistImages, startProcessing]);
 
 
@@ -612,6 +625,7 @@ const App = () => {
           {images.length === 0 ? (
             <StartShoot 
               onStart={() => setIsCameraOpen(true)}
+              onStart360={() => setIs360CameraOpen(true)}
               onFilesSelected={handleFilesSelected}
               isProcessing={isProcessing}
               dealershipBackground={dealershipBackground}
@@ -785,6 +799,13 @@ const App = () => {
         <CameraCapture 
           onClose={() => setIsCameraOpen(false)}
           onCaptureComplete={handleImagesCaptured}
+        />
+      )}
+      {is360CameraOpen && (
+        <Spin360Capture
+          vehicleType={selected360VehicleType}
+          onComplete={handle360Complete}
+          onCancel={() => setIs360CameraOpen(false)}
         />
       )}
       {currentImageIndex !== null && (

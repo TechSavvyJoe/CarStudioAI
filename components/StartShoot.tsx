@@ -7,6 +7,7 @@ import type { DealershipBackground } from '../types';
 
 interface StartShootProps {
   onStart: () => void;
+  onStart360: () => void; // New prop for 360 spin mode
   onFilesSelected: (files: FileList) => void;
   isProcessing: boolean;
   dealershipBackground: DealershipBackground | null;
@@ -15,7 +16,8 @@ interface StartShootProps {
 }
 
 export const StartShoot: React.FC<StartShootProps> = ({ 
-  onStart, 
+  onStart,
+  onStart360,
   onFilesSelected, 
   isProcessing,
   dealershipBackground,
@@ -32,7 +34,7 @@ export const StartShoot: React.FC<StartShootProps> = ({
         Capture the perfect shots with our guided process, or upload your existing photos to get started.
       </p>
 
-      <div className="mt-8">
+      <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
         <button
           onClick={onStart}
           disabled={isProcessing}
@@ -40,6 +42,15 @@ export const StartShoot: React.FC<StartShootProps> = ({
         >
           <CameraIcon className="-ml-1 h-6 w-6" aria-hidden="true" />
           Start Guided Photoshoot
+        </button>
+        
+        <button
+          onClick={onStart360}
+          disabled={isProcessing}
+          className="inline-flex items-center justify-center gap-x-3 rounded-md bg-purple-600 px-8 py-4 text-lg font-semibold text-white shadow-sm transition-transform duration-200 hover:bg-purple-500 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+        >
+          <span className="text-xl">360°</span>
+          Start 360° Spin
         </button>
       </div>
       <div className="my-6 flex items-center justify-center">
