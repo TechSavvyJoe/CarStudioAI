@@ -119,6 +119,10 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
   const [previewingImageIndex, setPreviewingImageIndex] = useState<number | null>(null);
   const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
   const [shutterKey, setShutterKey] = useState(0);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 }); // Device tilt for level indicator
+  const [showLevel, setShowLevel] = useState(() => {
+    return localStorage.getItem('showLevel') !== 'false';
+  });
   
   // Safely validate vehicle type from localStorage
   const getValidVehicleType = (): VehicleType | null => {
@@ -178,6 +182,38 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
     };
   }, []);
 
+  // Device orientation/accelerometer for level indicator
+  useEffect(() => {
+    if (!showLevel) return;
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      // beta: front-to-back tilt (-180 to 180), 0 is level
+      // gamma: left-to-right tilt (-90 to 90), 0 is level
+      const beta = event.beta || 0;
+      const gamma = event.gamma || 0;
+      
+      setTilt({ x: gamma, y: beta });
+    };
+
+    // Request permission for iOS 13+
+    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      (DeviceOrientationEvent as any).requestPermission()
+        .then((permissionState: string) => {
+          if (permissionState === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          }
+        })
+        .catch(console.error);
+    } else {
+      // Non-iOS or older iOS
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, [showLevel]);
+
   useEffect(() => {
     localStorage.setItem('showGuides', String(showGuides));
   }, [showGuides]);
@@ -185,6 +221,10 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
   useEffect(() => {
     localStorage.setItem('showGrid', String(showGrid));
   }, [showGrid]);
+
+  useEffect(() => {
+    localStorage.setItem('showLevel', String(showLevel));
+  }, [showLevel]);
 
   useEffect(() => {
     localStorage.setItem('guideOpacity', String(guideOpacity));
@@ -483,6 +523,38 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
             />
         )}
 
+        {/* Level Indicator - Subtle horizontal line that tilts with device */}
+        {showLevel && streamStarted && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            {/* Horizontal reference line (fixed) */}
+            <div className="absolute left-1/2 top-0 transform -translate-x-1/2">
+              <div className="w-32 h-0.5 bg-white/20"></div>
+            </div>
+            
+            {/* Active level line (tilts with device) */}
+            <div 
+              className="absolute left-1/2 top-0 transform -translate-x-1/2 transition-transform duration-100"
+              style={{ transform: `translateX(-50%) rotate(${-tilt.x}deg)` }}
+            >
+              <div className={`w-32 h-1 rounded-full transition-colors duration-200 ${
+                Math.abs(tilt.x) < 2 && Math.abs(tilt.y - 90) < 5 
+                  ? 'bg-green-400 shadow-lg shadow-green-400/50' 
+                  : 'bg-yellow-400/80'
+              }`}>
+                {/* Center dot */}
+                <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
+              </div>
+            </div>
+            
+            {/* Level indicator - shows degrees when not level */}
+            {Math.abs(tilt.x) >= 2 && (
+              <div className="absolute left-1/2 top-6 transform -translate-x-1/2 text-xs text-white/70 bg-black/50 px-2 py-0.5 rounded">
+                {tilt.x > 0 ? '→' : '←'} {Math.abs(tilt.x).toFixed(1)}°
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tap-to-focus animation */}
         {focusPoint && (
           <div
@@ -540,6 +612,10 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
                 <div className="flex items-center justify-between">
                     <label htmlFor="showGrid" className="text-sm text-gray-300">Show Grid</label>
                     <input type="checkbox" id="showGrid" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="toggle-switch" />
+                </div>
+                <div className="flex items-center justify-between">
+                    <label htmlFor="showLevel" className="text-sm text-gray-300">Show Level</label>
+                    <input type="checkbox" id="showLevel" checked={showLevel} onChange={e => setShowLevel(e.target.checked)} className="toggle-switch" />
                 </div>
                  <div>
                     <label htmlFor="guideOpacity" className="block text-sm text-gray-300 mb-1">Guide Opacity</label>
