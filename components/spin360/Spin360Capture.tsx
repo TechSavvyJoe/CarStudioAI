@@ -13,6 +13,11 @@ import {
   getNextUncapturedIndex,
   normalizeAngle,
 } from './angleHelper';
+import { CarFrontQuarterGuide } from '../icons/guides/CarFrontQuarterGuide';
+import { CarSideGuide } from '../icons/guides/CarSideGuide';
+import { CarRearQuarterGuide } from '../icons/guides/CarRearQuarterGuide';
+import { CarFrontGuide } from '../icons/guides/CarFrontGuide';
+import { CarRearGuide } from '../icons/guides/CarRearGuide';
 
 interface Spin360CaptureProps {
   vehicleType: VehicleType;
@@ -46,6 +51,13 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const [shootTimer, setShootTimer] = useState<number>(0);
   const [movementSpeed, setMovementSpeed] = useState<number>(0);
   const [hasStabilization, setHasStabilization] = useState(false);
+  const [showGuides, setShowGuides] = useState(() => {
+    return localStorage.getItem('showGuides') !== 'false';
+  });
+  const [guideOpacity, setGuideOpacity] = useState(() => {
+    const savedOpacity = localStorage.getItem('guideOpacity');
+    return savedOpacity ? parseFloat(savedOpacity) : 0.6;
+  });
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -342,6 +354,30 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const progress = getProgressPercentage(capturedIndices.size);
   const isAligned = isWithinTolerance(currentAngle, targetAngle);
 
+  // Get appropriate guide overlay based on target angle
+  const getGuideForAngle = (angle: number) => {
+    const normalized = ((angle % 360) + 360) % 360;
+    
+    // Front: 315-45 degrees
+    if (normalized >= 315 || normalized < 45) {
+      if (normalized >= 337.5 || normalized < 22.5) return CarFrontGuide;
+      return normalized < 180 ? CarFrontQuarterGuide : CarFrontQuarterGuide;
+    }
+    // Right Side: 45-135 degrees
+    if (normalized >= 45 && normalized < 135) {
+      return normalized < 90 ? CarFrontQuarterGuide : CarSideGuide;
+    }
+    // Rear: 135-225 degrees
+    if (normalized >= 135 && normalized < 225) {
+      if (normalized >= 157.5 && normalized < 202.5) return CarRearGuide;
+      return normalized < 180 ? CarRearQuarterGuide : CarRearQuarterGuide;
+    }
+    // Left Side: 225-315 degrees
+    return normalized < 270 ? CarRearQuarterGuide : CarSideGuide;
+  };
+
+  const CurrentGuide = getGuideForAngle(targetAngle);
+
   // Format timer as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -366,6 +402,19 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
         
         {/* Canvas for capture (hidden) */}
         <canvas ref={canvasRef} className="hidden" />
+        
+        {/* Vehicle Guide Overlay */}
+        {showGuides && CurrentGuide && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ opacity: guideOpacity }}
+          >
+            <CurrentGuide 
+              vehicleType={vehicleType}
+              className="w-full h-full max-w-4xl max-h-screen text-blue-400"
+            />
+          </div>
+        )}
         
         {/* Spyne AI Style Overlay */}
         <div className="absolute inset-0 pointer-events-none">
@@ -470,6 +519,23 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
               }`}
             >
               {autoCapture ? '1x Auto' : 'Manual'}
+            </button>
+            
+            {/* Guide toggle button */}
+            <button
+              onClick={() => {
+                const newValue = !showGuides;
+                setShowGuides(newValue);
+                localStorage.setItem('showGuides', String(newValue));
+              }}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors pointer-events-auto ${
+                showGuides 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white/20 text-white'
+              }`}
+              title="Toggle vehicle guide overlay"
+            >
+              {showGuides ? '👁️ Guide' : '👁️‍🗨️ Guide'}
             </button>
           </div>
 
