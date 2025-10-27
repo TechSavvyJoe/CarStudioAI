@@ -359,12 +359,23 @@ const App = () => {
     const imageToReprocess = images.find(img => img.id === imageId);
     if (!imageToReprocess || isProcessing) return;
     
-    // Set the specific image to processing state immediately for better UX
+    // Reset image to pending state with cleared processed URL
+    const resetImage: ImageFile = {
+      ...imageToReprocess,
+      status: 'pending',
+      processedUrl: null,
+      error: null
+    };
+    
+    // Clean up old processed blob URL
+    if (imageToReprocess.processedUrl) {
+      URL.revokeObjectURL(imageToReprocess.processedUrl);
+    }
+    
+    // Update state with reset image
     updateAndPersistImages(prevImages =>
       prevImages.map(img =>
-        img.id === imageId
-          ? { ...img, status: 'processing', processedUrl: null, error: null }
-          : img
+        img.id === imageId ? resetImage : img
       )
     );
 
@@ -372,9 +383,9 @@ const App = () => {
     setIsPaused(false);
 
     try {
-      // Re-use the batch processor with a single image
+      // Re-use the batch processor with the reset image
       await processImageBatch(
-        [imageToReprocess], 
+        [resetImage], 
         (updatedImage) => {
            updateAndPersistImages((prevImages) =>
              prevImages.map((img) =>
