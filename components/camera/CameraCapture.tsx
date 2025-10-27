@@ -637,16 +637,8 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
             })}
         </div>
         
-        {/* Shutter Button & Done button */}
-        <div className="flex items-center justify-center gap-x-16 mt-4">
-            <div className="w-20"></div> {/* Spacer */}
-            <button
-                onClick={handleCapture}
-                className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-gray-600 ring-4 ring-white/20 transition-transform duration-200 hover:scale-110 active:scale-95"
-                aria-label="Capture photo"
-            >
-                <ShutterIcon className="w-16 h-16 text-gray-800" />
-            </button>
+        {/* Done button - Bottom center */}
+        <div className="flex items-center justify-center mt-4">
             <button
               onClick={handleCaptureComplete}
               disabled={capturedImages.length === 0}
@@ -658,6 +650,28 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
               <span className="text-xs">({capturedImages.length})</span>
             </button>
         </div>
+      </div>
+
+      {/* Shutter Button - Middle Right in Landscape */}
+      <div className="absolute right-8 top-1/2 transform -translate-y-1/2 z-20 hidden landscape:block">
+        <button
+            onClick={handleCapture}
+            className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-800 ring-4 ring-red-400/30 transition-transform duration-200 hover:scale-110 active:scale-95 shadow-lg shadow-red-600/50"
+            aria-label="Capture photo"
+        >
+            <div className="w-16 h-16 bg-red-500 rounded-full border-2 border-white"></div>
+        </button>
+      </div>
+
+      {/* Shutter Button - Bottom Center in Portrait (fallback) */}
+      <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20 block landscape:hidden">
+        <button
+            onClick={handleCapture}
+            className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-800 ring-4 ring-red-400/30 transition-transform duration-200 hover:scale-110 active:scale-95 shadow-lg shadow-red-600/50"
+            aria-label="Capture photo"
+        >
+            <div className="w-16 h-16 bg-red-500 rounded-full border-2 border-white"></div>
+        </button>
       </div>
     </div>
   );
