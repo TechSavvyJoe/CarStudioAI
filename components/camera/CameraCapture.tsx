@@ -567,37 +567,27 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
         <div key={shutterKey} className="absolute inset-0 rounded-full animate-shutter-burst pointer-events-none" />
       </div>
 
-      {/* Top Controls */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 bg-gradient-to-b from-black/60 to-transparent">
+      {/* Clean Top Bar */}
+      <div className="absolute top-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center z-10">
         <button
           onClick={onClose}
-          className="p-3 bg-black/50 rounded-full hover:bg-white/20 transition-colors backdrop-blur-sm"
+          className="p-2 sm:p-3 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm flex-shrink-0"
           aria-label="Close camera"
         >
-          <XIcon className="w-6 h-6" />
+          <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
 
-        <div className="text-center p-2 bg-black/50 rounded-lg backdrop-blur-sm max-w-[50%]">
-            <h3 className="font-bold text-lg leading-tight">{currentShot.name}</h3>
-            <p className="text-xs text-gray-300 leading-tight">{currentShot.description}</p>
+        <div className="text-center px-2 py-1.5 sm:px-3 sm:py-2 bg-black/50 rounded-full backdrop-blur-sm flex-1 mx-2 sm:mx-3 max-w-md">
+            <h3 className="font-semibold text-sm sm:text-base leading-tight truncate">{currentShot.name}</h3>
         </div>
 
-        <div className="flex flex-col gap-2">
-            <button
-              onClick={() => setIsGuideSettingsOpen(prev => !prev)}
-              className={`p-3 rounded-full transition-colors backdrop-blur-sm ${isGuideSettingsOpen ? 'bg-blue-600' : 'bg-black/50 hover:bg-white/20'}`}
-              aria-label="Adjust guides"
-            >
-              <AdjustmentsIcon className="w-6 h-6" />
-            </button>
-            <button
-              onClick={toggleFacingMode}
-              className="p-3 bg-black/50 rounded-full hover:bg-white/20 transition-colors backdrop-blur-sm"
-              aria-label="Switch camera"
-            >
-              <CameraRotateIcon className="w-6 h-6" />
-            </button>
-        </div>
+        <button
+          onClick={() => setIsGuideSettingsOpen(prev => !prev)}
+          className={`p-2 sm:p-3 rounded-full transition-colors backdrop-blur-sm flex-shrink-0 ${isGuideSettingsOpen ? 'bg-blue-600' : 'bg-black/50 hover:bg-black/70'}`}
+          aria-label="Settings"
+        >
+          <AdjustmentsIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
       </div>
       
       {/* Guide Settings Panel */}
@@ -696,8 +686,8 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
 
       {/* Bottom Controls and Filmstrip */}
       <div className="absolute bottom-0 left-0 right-0 p-4 z-10 bg-gradient-to-t from-black/60 to-transparent">
-        {/* Filmstrip */}
-        <div ref={filmstripRef} className="flex items-center gap-2 overflow-x-auto pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        {/* Compact Filmstrip and Controls */}
+        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-2 sm:pb-3 scrollbar-hide">
             {SHOT_LIST.map((shot, index) => {
               const capturedImageIndex = capturedImages.findIndex(img => img.shotName === shot.name);
               return (
@@ -713,41 +703,37 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
             })}
         </div>
         
-        {/* Done button - Bottom center */}
-        <div className="flex items-center justify-center mt-4">
+        {/* Controls Row */}
+        <div className="flex items-center justify-center gap-3 sm:gap-4 mt-2 sm:mt-3">
+            <button
+              onClick={toggleFacingMode}
+              className="p-2.5 sm:p-3 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
+              aria-label="Switch camera"
+            >
+              <CameraRotateIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+
+            <button
+              onClick={handleCapture}
+              className="w-16 h-16 sm:w-20 sm:h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-white shadow-2xl transition-transform duration-200 hover:scale-110 active:scale-95"
+              aria-label="Capture photo"
+            >
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500 rounded-full border-2 border-white"></div>
+            </button>
+
             <button
               onClick={handleCaptureComplete}
               disabled={capturedImages.length === 0}
-              className="w-20 h-20 bg-blue-600 rounded-full flex flex-col items-center justify-center text-white font-bold text-sm border-4 border-blue-400 disabled:bg-gray-600 disabled:border-gray-500 disabled:cursor-not-allowed transition-colors"
+              className={`px-4 sm:px-6 py-2 sm:py-3 rounded-full font-semibold transition-all text-sm sm:text-base ${
+                capturedImages.length > 0
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-700'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
               aria-label="Finish photoshoot"
             >
-              <CheckIcon className="w-6 h-6" />
-              <span>Done</span>
-              <span className="text-xs">({capturedImages.length})</span>
+              Done ({capturedImages.length})
             </button>
         </div>
-      </div>
-
-      {/* Shutter Button - Middle Right in Landscape */}
-      <div className="absolute right-8 top-1/2 transform -translate-y-1/2 z-20 hidden landscape:block">
-        <button
-            onClick={handleCapture}
-            className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-800 ring-4 ring-red-400/30 transition-transform duration-200 hover:scale-110 active:scale-95 shadow-lg shadow-red-600/50"
-            aria-label="Capture photo"
-        >
-            <div className="w-16 h-16 bg-red-500 rounded-full border-2 border-white"></div>
-        </button>
-      </div>
-
-      {/* Shutter Button - Bottom Center in Portrait (fallback) */}
-      <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20 block landscape:hidden">
-        <button
-            onClick={handleCapture}
-            className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-800 ring-4 ring-red-400/30 transition-transform duration-200 hover:scale-110 active:scale-95 shadow-lg shadow-red-600/50"
-            aria-label="Capture photo"
-        >
-            <div className="w-16 h-16 bg-red-500 rounded-full border-2 border-white"></div>
-        </button>
       </div>
     </div>
   );

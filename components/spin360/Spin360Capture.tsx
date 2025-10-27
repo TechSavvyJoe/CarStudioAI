@@ -345,6 +345,12 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
     onComplete(spin360Set);
   };
 
+  const handleComplete = () => {
+    if (capturedImages.length >= 8) {
+      completeSpin360(capturedImages);
+    }
+  };
+
   const targetAngle = getTargetAngle(targetIndex);
   const guidance = getDirectionGuidance(currentAngle, targetAngle);
   const progress = getProgressPercentage(capturedIndices.size);
@@ -398,163 +404,161 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
             </svg>
           </button>
 
-          {/* Top Center - Current Angle Progress */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full font-bold text-lg">
-            {Math.round(currentAngle)}°
-          </div>
-
-          {/* Top Right - Vehicle Type Badge */}
-          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur text-white px-4 py-2 rounded-lg font-semibold">
-            {vehicleTypeDisplay}
-          </div>
-
-          {/* Left Side - Shot Counter */}
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
-            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-3 text-white">
-              <div className="text-xs opacity-75 mb-1">[::]:</div>
-              <div className="text-3xl font-bold">{capturedIndices.size}</div>
-            </div>
-            
-            {/* Stabilization Indicator */}
-            {hasStabilization && (
-              <div className="bg-blue-500/80 backdrop-blur rounded-full p-2" title="Stabilization Active">
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9V5h2v4h4v2h-4v4H9v-4H5V9h4z" />
-                </svg>
-              </div>
-            )}
-          </div>
-
-          {/* Right Side - Large Capture Button (Manual Mode) */}
-          {!autoCapture && (
+          {/* Clean Top Bar */}
+          <div className="absolute top-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between z-10">
             <button
-              onClick={captureImage}
-              disabled={isCapturing}
-              className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-red-600 border-4 border-white shadow-2xl pointer-events-auto hover:bg-red-700 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center"
-              aria-label="Capture photo"
+              onClick={onCancel}
+              className="p-2 sm:p-3 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
+              aria-label="Close 360 capture"
             >
-              <div className="w-16 h-16 rounded-full border-2 border-white" />
+              <XIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </button>
-          )}
 
-          {/* Right Side - Auto Mode Indicator */}
-          {autoCapture && isAligned && (
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-red-600 border-4 border-white shadow-2xl animate-pulse flex items-center justify-center">
-              <div className="w-16 h-16 rounded-full border-2 border-white" />
+            <div className="flex items-center gap-2 sm:gap-3 bg-black/50 backdrop-blur-sm rounded-full px-3 sm:px-4 py-2">
+              <div className="text-xl sm:text-2xl font-bold text-white">{capturedIndices.size}</div>
+              <div className="text-xs sm:text-sm text-gray-300">/ {TOTAL_ANGLES}</div>
             </div>
-          )}
 
-          {/* Bottom Right - Vehicle Icon and Timer */}
-          <div className="absolute bottom-24 right-6 flex flex-col items-center gap-3">
-            {/* Vehicle Type Icon */}
-            <div className="w-16 h-16 bg-black/50 backdrop-blur rounded-lg flex items-center justify-center">
-              <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" />
-              </svg>
-            </div>
-            
-            {/* Timer */}
-            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white text-center">
-              <div className="text-lg font-bold font-mono">{formatTime(shootTimer)}</div>
+            <div className="bg-black/50 backdrop-blur-sm rounded-full px-3 sm:px-4 py-2">
+              <div className="text-xs sm:text-sm font-semibold text-white">{Math.round(currentAngle)}°</div>
             </div>
           </div>
 
-          {/* Bottom Center - Warning Message */}
-          {shootTimer < 30 && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 backdrop-blur rounded-full px-6 py-3 text-white">
-              <div className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              </div>
-              <div className="text-sm font-medium">Don't end your shoot before 30 seconds</div>
-            </div>
-          )}
+          {/* Bottom Controls Bar */}
+          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-black/80 to-transparent z-10">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              
+              {/* Left: Mode Toggle */}
+              <button
+                onClick={() => setAutoCapture(!autoCapture)}
+                className={`px-3 sm:px-4 py-2 rounded-full font-medium transition-all text-sm sm:text-base ${
+                  autoCapture 
+                    ? 'bg-green-500 text-white shadow-lg shadow-green-500/30' 
+                    : 'bg-white/20 text-white backdrop-blur-sm'
+                }`}
+              >
+                {autoCapture ? 'Auto' : 'Manual'}
+              </button>
 
-          {/* Bottom Left - Speed and Settings */}
-          <div className="absolute bottom-6 left-6 flex items-center gap-3">
-            {/* Movement Speed */}
-            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white text-center">
-              <div className="text-2xl font-bold">{movementSpeed.toFixed(1)}</div>
-              <div className="text-xs opacity-75">speed</div>
+              {/* Center: Shutter Button */}
+              <button
+                onClick={autoCapture ? undefined : captureImage}
+                disabled={autoCapture || isCapturing}
+                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-white shadow-2xl transition-all flex items-center justify-center ${
+                  autoCapture && isAligned
+                    ? 'bg-red-600 animate-pulse'
+                    : autoCapture
+                    ? 'bg-gray-600 opacity-50'
+                    : 'bg-red-600 hover:bg-red-700 active:scale-95'
+                }`}
+                aria-label="Capture photo"
+              >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-white" />
+              </button>
+
+              {/* Right: Done Button */}
+              <button
+                onClick={handleComplete}
+                disabled={capturedIndices.size < 8}
+                className={`px-4 sm:px-6 py-2 rounded-full font-semibold transition-all text-sm sm:text-base ${
+                  capturedIndices.size >= 8
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-700'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Done
+              </button>
             </div>
-            
-            {/* Auto-capture toggle */}
-            <button
-              onClick={() => setAutoCapture(!autoCapture)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors pointer-events-auto ${
-                autoCapture 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-white/20 text-white'
-              }`}
-            >
-              {autoCapture ? '1x Auto' : 'Manual'}
-            </button>
-            
-            {/* Guide toggle button */}
-            <button
-              onClick={() => {
-                const newValue = !showGuides;
-                setShowGuides(newValue);
-                localStorage.setItem('showGuides', String(newValue));
-              }}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors pointer-events-auto ${
-                showGuides 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-white/20 text-white'
-              }`}
-              title="Toggle vehicle guide overlay"
-            >
-              {showGuides ? '👁️ Guide' : '👁️‍🗨️ Guide'}
-            </button>
           </div>
 
-          {/* Center - Guidance Circle (Simplified) */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <svg className="w-64 h-64">
+          {/* Minimal Center Progress Ring */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <svg className="w-48 h-48 sm:w-64 sm:h-64">
               {/* Background circle */}
+              <circle
+                cx="96"
+                cy="96"
+                r="88"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="2"
+                className="sm:hidden"
+              />
               <circle
                 cx="128"
                 cy="128"
                 r="120"
                 fill="none"
-                stroke="rgba(255,255,255,0.2)"
+                stroke="rgba(255,255,255,0.1)"
                 strokeWidth="2"
+                className="hidden sm:block"
               />
               
               {/* Progress arc */}
+              <circle
+                cx="96"
+                cy="96"
+                r="88"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="4"
+                strokeDasharray={`${(progress / 100) * 553} 553`}
+                strokeLinecap="round"
+                transform="rotate(-90 96 96)"
+                className="sm:hidden"
+              />
               <circle
                 cx="128"
                 cy="128"
                 r="120"
                 fill="none"
                 stroke="#10b981"
-                strokeWidth="3"
+                strokeWidth="4"
                 strokeDasharray={`${(progress / 100) * 754} 754`}
                 strokeLinecap="round"
                 transform="rotate(-90 128 128)"
+                className="hidden sm:block"
               />
               
-              {/* Angle markers (captured shots) */}
+              {/* Captured dots */}
               {Array.from({ length: TOTAL_ANGLES }).map((_, i) => {
                 const angle = getTargetAngle(i);
                 const rad = ((angle - 90) * Math.PI) / 180;
-                const x = 128 + 110 * Math.cos(rad);
-                const y = 128 + 110 * Math.sin(rad);
                 const isCaptured = capturedIndices.has(i);
                 
                 return (
-                  <circle
-                    key={i}
-                    cx={x}
-                    cy={y}
-                    r={isCaptured ? 6 : 3}
-                    fill={isCaptured ? '#10b981' : 'rgba(255,255,255,0.3)'}
-                  />
+                  <React.Fragment key={i}>
+                    <circle
+                      cx={96 + 80 * Math.cos(rad)}
+                      cy={96 + 80 * Math.sin(rad)}
+                      r={isCaptured ? 5 : 2}
+                      fill={isCaptured ? '#10b981' : 'rgba(255,255,255,0.3)'}
+                      className="sm:hidden"
+                    />
+                    <circle
+                      cx={128 + 110 * Math.cos(rad)}
+                      cy={128 + 110 * Math.sin(rad)}
+                      r={isCaptured ? 6 : 3}
+                      fill={isCaptured ? '#10b981' : 'rgba(255,255,255,0.3)'}
+                      className="hidden sm:block"
+                    />
+                  </React.Fragment>
                 );
               })}
               
               {/* Current heading indicator */}
               {hasCompass && (
                 <>
+                  <line
+                    x1="96"
+                    y1="96"
+                    x2={96 + 70 * Math.sin((currentAngle * Math.PI) / 180)}
+                    y2={96 - 70 * Math.cos((currentAngle * Math.PI) / 180)}
+                    stroke={isAligned ? '#10b981' : '#fbbf24'}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    className="sm:hidden"
+                  />
                   <line
                     x1="128"
                     y1="128"
@@ -563,17 +567,19 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
                     stroke={isAligned ? '#10b981' : '#fbbf24'}
                     strokeWidth="3"
                     strokeLinecap="round"
+                    className="hidden sm:block"
                   />
-                  <circle cx="128" cy="128" r="6" fill={isAligned ? '#10b981' : '#fbbf24'} />
+                  <circle cx="96" cy="96" r="5" fill={isAligned ? '#10b981' : '#fbbf24'} className="sm:hidden" />
+                  <circle cx="128" cy="128" r="6" fill={isAligned ? '#10b981' : '#fbbf24'} className="hidden sm:block" />
                 </>
               )}
             </svg>
           </div>
 
-          {/* No Compass Warning */}
+          {/* Compass Warning */}
           {!hasCompass && (
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-white px-4 py-2 rounded-lg text-sm font-medium">
-              ⚠️ Compass unavailable - Manual capture mode
+            <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 backdrop-blur-sm text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium">
+              ⚠️ Compass unavailable - Manual mode
             </div>
           )}
 
