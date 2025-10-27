@@ -111,56 +111,63 @@ export const ARProgressRing: React.FC<ARProgressRingProps> = ({
           filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3))',
         }}
       >
-        {/* Background circle (unfilled portion) */}
+        {/* Background circle (unfilled portion) - More visible */}
         <circle
           cx={center}
           cy={center}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.15)"
+          stroke="rgba(255, 255, 255, 0.3)"
           strokeWidth={strokeWidth}
           fill="none"
-          strokeDasharray="4 4"
+          strokeDasharray="8 8"
         />
 
         {/* Captured segments */}
         {generateArcs()}
 
-        {/* Current target angle indicator (pulsing dot) */}
+        {/* Current target angle indicator (pulsing dot) - More visible */}
         <circle
           cx={targetX}
           cy={targetY}
-          r={6}
-          fill="#60a5fa"
+          r={8}
+          fill="#3b82f6"
           stroke="white"
-          strokeWidth={2}
+          strokeWidth={3}
           className="animate-pulse"
+          style={{ filter: 'drop-shadow(0 0 6px #3b82f6)' }}
         />
 
-        {/* Center crosshair */}
-        <g opacity={0.6}>
+        {/* Center crosshair - More prominent */}
+        <g opacity={0.8}>
           <line
-            x1={center - 20}
+            x1={center - 30}
             y1={center}
-            x2={center + 20}
+            x2={center + 30}
             y2={center}
             stroke="white"
-            strokeWidth={1.5}
+            strokeWidth={2}
           />
           <line
             x1={center}
-            y1={center - 20}
+            y1={center - 30}
             x2={center}
-            y2={center + 20}
+            y2={center + 30}
             stroke="white"
-            strokeWidth={1.5}
+            strokeWidth={2}
           />
           <circle
             cx={center}
             cy={center}
-            r={8}
+            r={12}
             stroke="white"
-            strokeWidth={1.5}
+            strokeWidth={2}
             fill="none"
+          />
+          <circle
+            cx={center}
+            cy={center}
+            r={3}
+            fill="white"
           />
         </g>
 

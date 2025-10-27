@@ -375,16 +375,14 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
         {/* Canvas for capture (hidden) */}
         <canvas ref={canvasRef} className="hidden" />
         
-        {/* AR Progress Ring Overlay */}
-        {showGuides && (
-          <ARProgressRing 
-            capturedAngles={Array.from(capturedIndices).map(idx => getTargetAngle(idx))}
-            totalShots={TOTAL_ANGLES}
-            currentAngle={getTargetAngle(targetIndex)}
-            size={280}
-            strokeWidth={8}
-          />
-        )}
+        {/* AR Progress Ring Overlay - Always Visible */}
+        <ARProgressRing 
+          capturedAngles={Array.from(capturedIndices).map(idx => getTargetAngle(idx))}
+          totalShots={TOTAL_ANGLES}
+          currentAngle={getTargetAngle(targetIndex)}
+          size={280}
+          strokeWidth={8}
+        />
         
         {/* Spyne AI Style Overlay */}
         <div className="absolute inset-0 pointer-events-none">
