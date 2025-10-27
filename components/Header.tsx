@@ -10,28 +10,30 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ viewMode = 'queue', onViewChange }) => {
   return (
-    <header className="relative py-6 border-b border-gray-700/50 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-10">
-      <div className="container mx-auto px-4">
+    <header className="relative py-8 border-b border-gray-700/30 bg-gradient-to-b from-gray-900 via-gray-900/95 to-gray-900/50 backdrop-blur-xl sticky top-0 z-20 shadow-2xl">
+      <div className="container mx-auto px-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <CameraIcon className="w-8 h-8 mr-3 text-blue-400" />
+          <div className="flex items-center gap-4">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20">
+              <CameraIcon className="w-7 h-7 text-white" />
+            </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-white">
-                Auto Background <span className="text-blue-400">Studio</span>
+                Auto Background <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Studio</span>
               </h1>
-              <p className="text-gray-400 text-sm mt-1">Instantly upgrade your car photos to a professional studio setting.</p>
+              <p className="text-gray-400 text-sm mt-1.5">Instantly upgrade your car photos to a professional studio setting.</p>
             </div>
           </div>
 
           {/* View Switcher */}
           {onViewChange && (
-            <div className="flex items-center gap-2 bg-gray-800 p-1 rounded-lg">
+            <div className="flex items-center gap-1.5 bg-gray-800/80 p-1.5 rounded-xl backdrop-blur-sm shadow-lg border border-gray-700/50">
               <button
                 onClick={() => onViewChange('projects')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                   viewMode === 'projects'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -48,10 +50,10 @@ export const Header: React.FC<HeaderProps> = ({ viewMode = 'queue', onViewChange
               </button>
               <button
                 onClick={() => onViewChange('queue')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                   viewMode === 'queue'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
               >
                 <div className="flex items-center gap-2">
