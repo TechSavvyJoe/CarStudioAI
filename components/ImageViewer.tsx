@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { ImageFile } from '../types';
+import type { ImageFile, Spin360Set } from '../types';
 import { Spinner } from './Spinner';
 import { Placeholder } from './Placeholder';
 import { XIcon } from './icons/XIcon';
@@ -10,6 +10,7 @@ import { RetryIcon } from './icons/RetryIcon';
 import { ErrorIcon } from './icons/ErrorIcon';
 import { WandIcon } from './icons/WandIcon';
 import { ArrowLeftRightIcon } from './icons/ArrowLeftRightIcon';
+import { Spin360Viewer } from './spin360/Spin360Viewer';
 
 
 interface ImageViewerProps {
@@ -38,6 +39,27 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 
   const image = images[currentIndex];
   const imageContainerRef = useRef<HTMLDivElement>(null);
+
+  // Detect if current image is part of a 360 spin set
+  const spin360Set = useMemo<Spin360Set | null>(() => {
+    if (!image.spin360Id) return null;
+    
+    const spin360Images = images
+      .filter(img => img.spin360Id === image.spin360Id)
+      .sort((a, b) => (a.spin360Index ?? 0) - (b.spin360Index ?? 0));
+    
+    if (spin360Images.length < 2) return null;
+    
+    return {
+      id: image.spin360Id,
+      name: `360° Spin`,
+      vehicleType: 'sedan', // Default, would need to be stored if important
+      timestamp: Date.now(),
+      images: spin360Images,
+      totalAngles: 24, // Standard 360 spin has 24 angles
+      isComplete: spin360Images.length === 24,
+    };
+  }, [image, images]);
 
   // Guard: if no valid image, don't render
   if (!image) {
@@ -134,58 +156,77 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         
         {/* Image Display */}
         <div ref={imageContainerRef} className="relative w-full flex-1 flex items-center justify-center min-h-0">
-            {isImageLoading && <Placeholder />}
+            {spin360Set && spin360Set.images.every(img => img.status === 'completed' && img.processedUrl) ? (
+              // 360 Spin Viewer - all images are processed
+              <div className="w-full h-full max-w-7xl">
+                <Spin360Viewer spin360Set={spin360Set} className="w-full h-full" />
+              </div>
+            ) : spin360Set ? (
+              // 360 spin is still processing
+              <div className="text-center text-white">
+                <Spinner className="w-12 h-12 mx-auto mb-4" />
+                <p className="text-lg">Processing 360° spin...</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {spin360Set.images.filter(img => img.status === 'completed').length} / {spin360Set.totalAngles} images complete
+                </p>
+              </div>
+            ) : (
+              // Regular single image viewer
+              <>
+                {isImageLoading && <Placeholder />}
 
-            <div className={`relative max-w-full max-h-full transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}>
-                <img
-                    src={image.originalUrl}
-                    alt="Original"
-                    className="block max-w-full max-h-full object-contain"
-                    onLoad={() => setIsOriginalLoaded(true)}
-                />
-
-                {image.status === 'completed' && image.processedUrl ? (
-                    <>
-                        <div className="comparison-slider" style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`}}>
-                            <img
-                                src={image.processedUrl!}
-                                alt="Processed"
-                                className="absolute inset-0 w-full h-full object-contain"
-                                onLoad={() => setIsProcessedLoaded(true)}
-                             />
-                        </div>
-                        <div className="comparison-divider" style={{ left: `${sliderPosition}%` }} />
-                        <div className="comparison-handle" style={{ left: `${sliderPosition}%` }}>
-                            <ArrowLeftRightIcon className="w-6 h-6" />
-                        </div>
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={sliderPosition}
-                            onChange={(e) => setSliderPosition(Number(e.target.value))}
-                            className="slider-input"
-                            aria-label="Compare original and processed images"
-                        />
-                    </>
-                ) : image.processedUrl && (
+                <div className={`relative max-w-full max-h-full transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}>
                     <img
-                        src={image.processedUrl}
-                        alt="Processed"
-                        className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${isProcessedLoaded ? 'opacity-100' : 'opacity-0'}`}
-                        onLoad={() => setIsProcessedLoaded(true)}
+                        src={image.originalUrl}
+                        alt="Original"
+                        className="block max-w-full max-h-full object-contain"
+                        onLoad={() => setIsOriginalLoaded(true)}
                     />
-                )}
-            </div>
 
-          {(image.status === 'processing' || isRetouching) && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-center">
-              <Spinner className="w-12 h-12 text-blue-400"/>
-              <p className="mt-4 text-lg font-semibold text-white animate-pulse">
-                {isRetouching ? 'Applying AI Retouch...' : 'Creating Background...'}
-              </p>
-            </div>
-          )}
+                    {image.status === 'completed' && image.processedUrl ? (
+                        <>
+                            <div className="comparison-slider" style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`}}>
+                                <img
+                                    src={image.processedUrl!}
+                                    alt="Processed"
+                                    className="absolute inset-0 w-full h-full object-contain"
+                                    onLoad={() => setIsProcessedLoaded(true)}
+                                 />
+                            </div>
+                            <div className="comparison-divider" style={{ left: `${sliderPosition}%` }} />
+                            <div className="comparison-handle" style={{ left: `${sliderPosition}%` }}>
+                                <ArrowLeftRightIcon className="w-6 h-6" />
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={sliderPosition}
+                                onChange={(e) => setSliderPosition(Number(e.target.value))}
+                                className="slider-input"
+                                aria-label="Compare original and processed images"
+                            />
+                        </>
+                    ) : image.processedUrl && (
+                        <img
+                            src={image.processedUrl}
+                            alt="Processed"
+                            className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${isProcessedLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            onLoad={() => setIsProcessedLoaded(true)}
+                        />
+                    )}
+                </div>
+
+                {(image.status === 'processing' || isRetouching) && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-center">
+                    <Spinner className="w-12 h-12 text-blue-400"/>
+                    <p className="mt-4 text-lg font-semibold text-white animate-pulse">
+                      {isRetouching ? 'Applying AI Retouch...' : 'Creating Background...'}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
         </div>
         
         {/* Footer & Controls */}
