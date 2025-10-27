@@ -114,13 +114,25 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 9. RESULT: Photo-realistic composite that looks natively photographed at location
 
 **REFLECTION REMOVAL - ABSOLUTELY MANDATORY:**
-- Remove ALL visible reflections of photographer/person in:
-  * Vehicle paint (body panels, bumpers, fenders)
-  * Chrome trim and badges
-  * Glass surfaces (windows, headlights, taillights)
-  * Wheels and hubcaps
-- Replace with appropriate environmental reflections (sky, surroundings)
-- CRITICAL: No human figures, camera equipment, or photographer visible anywhere
+- SCAN EVERY reflective surface on vehicle for photographer/person reflections
+- Remove ALL visible reflections of photographer/person/equipment from:
+  * Vehicle paint - ALL body panels (hood, doors, fenders, bumpers, trunk, roof)
+  * Chrome trim, badges, emblems, door handles, mirror housings
+  * Glass surfaces (windows, windshield, headlights, taillights, side mirrors)
+  * Wheels, hubcaps, and any reflective wheel surfaces
+  * ANY shiny or reflective surface on the vehicle
+- Common reflection locations to CHECK:
+  * Door panels (especially passenger doors - most common)
+  * Curved surfaces near photographer
+  * Chrome bumpers and trim pieces
+  * Side mirrors (exterior) - high reflection probability
+  * Dark paint colors show reflections more clearly
+- Replace photographer reflections with appropriate environmental reflections:
+  * Sky gradients (blue/white for outdoors, neutral for studio)
+  * Soft light gradients matching the scene
+  * Generic environmental reflections (trees, clouds, buildings - NOT people)
+- CRITICAL: Absolutely ZERO human figures, cameras, phones, or photographer visible anywhere
+- VERIFY before output: Check EVERY reflective surface for human presence
 
 **FOR EXTERIOR VEHICLE SHOTS (front, side, rear, 3/4 angles):**
 1. Classify as exterior shot - use dealership background
@@ -219,14 +231,27 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 7. Seamlessly blend with micro-feathering - no visible edges or halos
 
 **REFLECTION REMOVAL - ABSOLUTELY MANDATORY:**
+- SCAN EVERY reflective surface on vehicle for photographer/person reflections
 - Remove ALL visible reflections of photographer/person/equipment from:
-  * Vehicle paint (body panels, bumpers, doors, fenders, hood, trunk)
-  * Chrome trim, badges, emblems, and brightwork
-  * Glass surfaces (windows, windshield, headlights, taillights, mirrors)
-  * Wheel surfaces and hubcaps
-  * Any reflective surface on the vehicle
-- Replace with clean environmental reflections (neutral sky, soft gradients)
-- CRITICAL: Zero traces of humans, cameras, or photographer anywhere in image
+  * Vehicle paint - ALL body panels (hood, doors, fenders, bumpers, trunk, roof)
+  * Chrome trim, badges, emblems, door handles, mirror housings
+  * Glass surfaces (windows, windshield, headlights, taillights, side mirrors)
+  * Wheel surfaces, hubcaps, brake rotors - any shiny wheel components
+  * ANY reflective or semi-reflective surface on the vehicle
+- Common reflection locations to CHECK thoroughly:
+  * Door panels (especially passenger doors - MOST COMMON reflection spot)
+  * Curved body panels near camera position
+  * Chrome bumpers and trim pieces
+  * Side mirrors (exterior) - extremely high reflection probability
+  * Dark paint colors (black, navy, burgundy) show reflections most clearly
+  * Glossy wheel finishes
+- Replace photographer reflections with clean environmental reflections:
+  * Sky gradients (blue/white for outdoors, neutral gray for studio)
+  * Soft light gradients that match the lighting environment
+  * Generic environmental reflections (clouds, trees, buildings - NEVER people/equipment)
+- CRITICAL: Absolutely ZERO human figures, cameras, phones, hands, or photographer visible
+- VERIFY before output: Systematically check EVERY reflective surface for any human presence
+- If uncertain, err on side of caution and replace suspicious reflections with clean gradient
 
 **FOR EXTERIOR VEHICLE SHOTS (full vehicle - front, side, rear, 3/4 views):**
 1. Extract vehicle cleanly with all details preserved
