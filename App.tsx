@@ -70,6 +70,7 @@ const App = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [batchName, setBatchName] = useState<string>('processed-car-photos');
+  const [imagePrefix, setImagePrefix] = useState<string>(''); // Custom label prefix for individual files
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
@@ -584,7 +585,18 @@ const App = () => {
             }
             const blob = await response.blob();
             const extension = getFileExtensionFromMimeType(blob.type);
-            const fileName = `${finalBatchName}-${index + 1}.${extension}`;
+            
+            // Build filename: Prefix-AI-Description or Prefix-Number if no AI name
+            let fileName: string;
+            if (imagePrefix.trim()) {
+              const aiName = image.aiGeneratedName || `Image-${index + 1}`;
+              fileName = `${imagePrefix.trim()}-${aiName}.${extension}`;
+            } else if (image.aiGeneratedName) {
+              fileName = `${image.aiGeneratedName}.${extension}`;
+            } else {
+              fileName = `${finalBatchName}-${index + 1}.${extension}`;
+            }
+            
             zip.file(fileName, blob);
             return fileName;
           } catch (err) {
@@ -713,7 +725,7 @@ const App = () => {
                 <div className="flex w-full lg:w-auto flex-col items-center lg:items-end gap-y-4">
                   <div className="w-full max-w-xs">
                     <label htmlFor="batch-name" className="block text-sm font-medium text-gray-300 text-left lg:text-right mb-1">
-                      Download Batch Name
+                      Download Batch Name (ZIP file)
                     </label>
                     <input
                       type="text"
@@ -724,6 +736,23 @@ const App = () => {
                       className="w-full bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 placeholder-gray-500"
                       placeholder="e.g., Ford-Mustang-2023"
                     />
+                  </div>
+                  <div className="w-full max-w-xs">
+                    <label htmlFor="image-prefix" className="block text-sm font-medium text-gray-300 text-left lg:text-right mb-1">
+                      Image Label Prefix (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="image-prefix"
+                      value={imagePrefix}
+                      onChange={(e) => setImagePrefix(e.target.value)}
+                      disabled={isProcessing || isDownloading}
+                      className="w-full bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 placeholder-gray-500"
+                      placeholder="e.g., 2023-Mustang-GT"
+                    />
+                    <p className="text-xs text-gray-400 mt-1 text-left lg:text-right">
+                      Format: {imagePrefix.trim() ? `"${imagePrefix.trim()}-AI-Description.jpg"` : '"AI-Description.jpg"'}
+                    </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2">
                      <input

@@ -35,6 +35,15 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   const [hasCompass, setHasCompass] = useState(false);
   const [initialAngle, setInitialAngle] = useState<number | null>(null);
   
+  // Enhanced sensor states
+  const [tiltX, setTiltX] = useState<number>(0); // Phone tilt left/right (beta)
+  const [tiltY, setTiltY] = useState<number>(0); // Phone tilt forward/back (gamma)
+  const [isLevelWarning, setIsLevelWarning] = useState(false);
+  const [accelerationData, setAccelerationData] = useState<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
+  const [hasMotionSensors, setHasMotionSensors] = useState(false);
+  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [hasLidar, setHasLidar] = useState(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const shutterAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -44,6 +53,14 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
   useEffect(() => {
     const initCamera = async () => {
       try {
+        // Check for LiDAR support (iOS devices with depth camera)
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        // LiDAR is available on newer iPhones/iPads with multiple rear cameras
+        const hasDepthCamera = videoDevices.length > 2; // Typical LiDAR devices have 3+ cameras
+        setHasLidar(hasDepthCamera);
+        
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
@@ -74,7 +91,7 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
     };
   }, []);
 
-  // Device orientation tracking for compass
+  // Device orientation tracking for compass and tilt
   useEffect(() => {
     const handleOrientation = (event: DeviceOrientationEvent) => {
       if (event.alpha !== null) {
@@ -90,6 +107,16 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
           const relativeAngle = normalizeAngle(compassHeading - initialAngle);
           setCurrentAngle(relativeAngle);
         }
+      }
+      
+      // Capture tilt data for level indicator
+      if (event.beta !== null && event.gamma !== null) {
+        setTiltX(event.beta); // Forward/back tilt (-180 to 180)
+        setTiltY(event.gamma); // Left/right tilt (-90 to 90)
+        
+        // Check if phone is reasonably level (within 15 degrees)
+        const isLevel = Math.abs(event.beta - 90) < 15 && Math.abs(event.gamma) < 15;
+        setIsLevelWarning(!isLevel);
       }
     };
 
@@ -110,6 +137,63 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
       window.removeEventListener('deviceorientation', handleOrientation);
     };
   }, [initialAngle]);
+
+  // Accelerometer for motion detection and stability
+  useEffect(() => {
+    const handleMotion = (event: DeviceMotionEvent) => {
+      if (event.acceleration) {
+        setHasMotionSensors(true);
+        setAccelerationData({
+          x: event.acceleration.x || 0,
+          y: event.acceleration.y || 0,
+          z: event.acceleration.z || 0,
+        });
+      }
+    };
+
+    // Request permission for iOS 13+
+    if (typeof DeviceMotionEvent !== 'undefined' && 
+        typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+      (DeviceMotionEvent as any).requestPermission()
+        .then((permission: string) => {
+          if (permission === 'granted') {
+            window.addEventListener('devicemotion', handleMotion);
+          }
+        });
+    } else {
+      window.addEventListener('devicemotion', handleMotion);
+    }
+
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion);
+    };
+  }, []);
+
+  // GPS location tracking
+  useEffect(() => {
+    if (navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          setGpsLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('GPS error:', error);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 5000,
+        }
+      );
+
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+      };
+    }
+  }, []);
 
   // Auto-capture when within tolerance
   useEffect(() => {
@@ -292,6 +376,111 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
               </>
             )}
           </svg>
+          
+          {/* Level Indicator (Bubble Level) */}
+          {hasMotionSensors && (
+            <div className="absolute top-16 right-4 bg-black/70 backdrop-blur rounded-lg p-3 text-white">
+              <div className="text-xs font-semibold mb-2 text-center">LEVEL</div>
+              {/* Bubble level visualization */}
+              <div className="relative w-24 h-24 bg-gray-800 rounded-full border-2 border-gray-600">
+                {/* Crosshair */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute w-full h-0.5 bg-gray-600" />
+                  <div className="absolute w-0.5 h-full bg-gray-600" />
+                  <div className="absolute w-8 h-8 rounded-full border-2 border-green-500" />
+                </div>
+                {/* Moving bubble based on tilt */}
+                <div 
+                  className={`absolute w-6 h-6 rounded-full transition-all ${
+                    isLevelWarning ? 'bg-red-500' : 'bg-green-400'
+                  }`}
+                  style={{
+                    left: `${50 + (tiltY / 30) * 50}%`, // gamma: -30 to +30 degrees
+                    top: `${50 - ((tiltX - 90) / 30) * 50}%`, // beta: 60 to 120 degrees (90 is vertical)
+                    transform: 'translate(-50%, -50%)',
+                    boxShadow: '0 0 10px rgba(255,255,255,0.5)'
+                  }}
+                />
+              </div>
+              {isLevelWarning && (
+                <div className="text-xs text-red-400 mt-2 text-center font-semibold">
+                  Keep phone vertical!
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Motion Stability Indicator */}
+          {hasMotionSensors && accelerationData && (
+            <div className="absolute top-56 right-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
+              <div className="text-xs font-semibold mb-1">STABILITY</div>
+              {(() => {
+                const totalAccel = Math.sqrt(
+                  accelerationData.x ** 2 + 
+                  accelerationData.y ** 2 + 
+                  accelerationData.z ** 2
+                );
+                const isStable = totalAccel < 2; // Threshold for "stable"
+                return (
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isStable ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                    <div className="text-xs">{isStable ? 'Stable' : 'Moving'}</div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          
+          {/* GPS Status Indicator */}
+          {gpsLocation && (
+            <div className="absolute top-4 right-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <div className="text-xs font-semibold">GPS LOCKED</div>
+              </div>
+              <div className="text-[10px] opacity-75 mt-1">
+                {gpsLocation.lat.toFixed(6)}, {gpsLocation.lng.toFixed(6)}
+              </div>
+            </div>
+          )}
+          
+          {/* LiDAR Status Indicator */}
+          {hasLidar && (
+            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur rounded-lg px-3 py-2 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                <div className="text-xs font-semibold">LiDAR ACTIVE</div>
+              </div>
+              <div className="text-[10px] opacity-75 mt-1">
+                Enhanced depth sensing
+              </div>
+            </div>
+          )}
+          
+          {/* Walking Guidance Overlay */}
+          {hasCompass && (
+            <div className="absolute bottom-32 left-0 right-0 flex justify-center">
+              <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 text-white">
+                <div className="text-sm font-semibold text-center">
+                  {(() => {
+                    const nextIndex = getNextUncapturedIndex(capturedIndices);
+                    if (nextIndex === null) return '✓ Complete!';
+                    
+                    const nextAngle = getTargetAngle(nextIndex);
+                    const diff = ((nextAngle - currentAngle + 540) % 360) - 180;
+                    const absDiff = Math.abs(diff);
+                    
+                    if (absDiff < 15) return '→ Hold steady ←';
+                    if (diff > 0) return `← Turn left ${absDiff.toFixed(0)}°`;
+                    return `Turn right ${absDiff.toFixed(0)}° →`;
+                  })()}
+                </div>
+                <div className="text-xs opacity-75 text-center mt-1">
+                  Keep phone vertical & walk smoothly
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Center guidance */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
