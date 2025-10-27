@@ -567,11 +567,23 @@ export const processImageBatch = async (
         // Wait for rate limit before making API call
         await waitForRateLimit();
         
-        const prompt = generateConsistentPrompt(dealershipBackground);
+        const promptWithFilenameRequest = `${prompt}
+
+**IMPORTANT - ALSO PROVIDE FILENAME:**
+After processing the image, also analyze what vehicle part/angle is shown and provide a concise descriptive filename.
+Rules for filename:
+- Use hyphens between words (e.g., "Front-Quarter-Passenger-Side")
+- Be specific about the part or angle (e.g., "Dashboard-Center-Console", "Rear-Tailgate-Open", "Wheel-Alloy-Front-Driver")
+- Keep it under 50 characters
+- Use professional automotive terminology
+- Examples: "Front-Quarter-View", "Interior-Dashboard", "Headlight-LED-Driver", "Engine-Bay-V8", "Trunk-Cargo-Open"
+
+Return the filename on a new line after processing the image.`;
+
         const carImagePart = await fileToGenerativePart(imageFile.originalFile);
         
         // Build the parts array - include background if provided
-        const parts: any[] = [carImagePart, { text: prompt }];
+        const parts: any[] = [carImagePart, { text: promptWithFilenameRequest }];
         
         if (dealershipBackground) {
           const backgroundPart = await fileToGenerativePart(dealershipBackground.file);
@@ -581,13 +593,38 @@ export const processImageBatch = async (
         const response = await ai.models.generateContent({
           model,
           contents: { parts },
-          config: { responseModalities: [Modality.IMAGE] },
+          config: { responseModalities: [Modality.IMAGE, Modality.TEXT] }, // Request BOTH image and text
         });
 
-        const resultPart = response.candidates?.[0]?.content?.parts?.[0];
+        // Extract both image and AI-generated filename from response
+        let processedImageData: string | null = null;
+        let mimeType: string | null = null;
+        let aiGeneratedName: string | null = null;
 
-        if (resultPart && 'inlineData' in resultPart && resultPart.inlineData) {
-          const { data: processedImageData, mimeType } = resultPart.inlineData;
+        // Parse response parts - can include both image and text
+        const responseParts = response.candidates?.[0]?.content?.parts || [];
+        
+        for (const part of responseParts) {
+          if ('inlineData' in part && part.inlineData) {
+            processedImageData = part.inlineData.data;
+            mimeType = part.inlineData.mimeType;
+          }
+          if ('text' in part && part.text) {
+            // Extract filename from text response
+            const text = part.text.trim();
+            console.log(`📝 [${imageFile.originalFile.name}] Raw AI text response: "${text}"`);
+            // Clean up the AI-generated name (remove quotes, extra spaces, etc.)
+            aiGeneratedName = text
+              .replace(/^["']|["']$/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/[^a-zA-Z0-9-]/g, '')
+              .replace(/-+/g, '-')
+              .replace(/^-|-$/g, '')
+              .substring(0, 50); // Limit length
+          }
+        }
+
+        if (processedImageData && mimeType) {
           const newProcessedUrl = base64ToBlobUrl(processedImageData, mimeType);
 
           // Clean up old blob URL if reprocessing
@@ -595,13 +632,27 @@ export const processImageBatch = async (
             URL.revokeObjectURL(imageFile.processedUrl);
           }
 
+          console.log(`✅ [${imageFile.originalFile.name}] Processed + AI label: "${aiGeneratedName || 'none'}"`);
+
           // Check pause state before marking complete
           if (pauseRef.current) {
-            onUpdate({ ...imageFile, status: 'paused', processedUrl: newProcessedUrl, error: 'Queue is paused.' });
+            onUpdate({ 
+              ...imageFile, 
+              status: 'paused', 
+              processedUrl: newProcessedUrl, 
+              aiGeneratedName: aiGeneratedName || imageFile.aiGeneratedName,
+              error: 'Queue is paused.' 
+            });
             continue;
           }
 
-          onUpdate({ ...imageFile, status: 'completed', processedUrl: newProcessedUrl, error: null });
+          onUpdate({ 
+            ...imageFile, 
+            status: 'completed', 
+            processedUrl: newProcessedUrl, 
+            aiGeneratedName: aiGeneratedName || imageFile.aiGeneratedName,
+            error: null 
+          });
           processed = true;
         } else {
           const finishReason = response.candidates?.[0]?.finishReason;
