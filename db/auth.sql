@@ -1,3 +1,10 @@
+-- Dealerships (create first since profiles references it)
+create table if not exists public.dealerships (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Profiles table mirrors auth.users with role and dealership assignment
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -7,16 +14,11 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
--- Dealerships
-create table if not exists public.dealerships (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  created_at timestamptz not null default now()
-);
-
 -- Add user/dealership to projects
 alter table if exists public.projects
-  add column if not exists user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists user_id uuid references auth.users(id) on delete cascade;
+  
+alter table if exists public.projects
   add column if not exists dealership_id uuid references public.dealerships(id) on delete set null;
 
 -- Ensure images still references projects (assumed from schema.sql)
@@ -59,17 +61,21 @@ alter table public.images enable row level security;
 
 -- Policies
 -- Profiles: users can read/update own; admins all
-create policy if not exists profiles_self_select on public.profiles
+drop policy if exists profiles_self_select on public.profiles;
+create policy profiles_self_select on public.profiles
   for select using (auth.uid() = id or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
-create policy if not exists profiles_self_update on public.profiles
+drop policy if exists profiles_self_update on public.profiles;
+create policy profiles_self_update on public.profiles
   for update using (auth.uid() = id or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
 -- Dealerships: admins full; users read only their dealership
-create policy if not exists dealerships_admin_all on public.dealerships
+drop policy if exists dealerships_admin_all on public.dealerships;
+create policy dealerships_admin_all on public.dealerships
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
-create policy if not exists dealerships_user_read on public.dealerships
+drop policy if exists dealerships_user_read on public.dealerships;
+create policy dealerships_user_read on public.dealerships
   for select using (
     exists (
       select 1 from public.profiles p
@@ -78,15 +84,18 @@ create policy if not exists dealerships_user_read on public.dealerships
   );
 
 -- Projects: insert as user; select/update/delete own or admin
-create policy if not exists projects_insert_self on public.projects
+drop policy if exists projects_insert_self on public.projects;
+create policy projects_insert_self on public.projects
   for insert with check (user_id = auth.uid());
 
-create policy if not exists projects_select_self_or_admin on public.projects
+drop policy if exists projects_select_self_or_admin on public.projects;
+create policy projects_select_self_or_admin on public.projects
   for select using (
     user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
   );
 
-create policy if not exists projects_modify_self_or_admin on public.projects
+drop policy if exists projects_modify_self_or_admin on public.projects;
+create policy projects_modify_self_or_admin on public.projects
   for update using (
     user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
   )
@@ -94,28 +103,33 @@ create policy if not exists projects_modify_self_or_admin on public.projects
     user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
   );
 
-create policy if not exists projects_delete_self_or_admin on public.projects
+drop policy if exists projects_delete_self_or_admin on public.projects;
+create policy projects_delete_self_or_admin on public.projects
   for delete using (
     user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
   );
 
 -- Images follow project access
-create policy if not exists images_select_by_project on public.images
+drop policy if exists images_select_by_project on public.images;
+create policy images_select_by_project on public.images
   for select using (
     exists (select 1 from public.projects pr where pr.id = images.project_id and (pr.user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')))
   );
 
-create policy if not exists images_insert_by_project on public.images
+drop policy if exists images_insert_by_project on public.images;
+create policy images_insert_by_project on public.images
   for insert with check (
     exists (select 1 from public.projects pr where pr.id = images.project_id and pr.user_id = auth.uid())
   );
 
-create policy if not exists images_modify_by_project on public.images
+drop policy if exists images_modify_by_project on public.images;
+create policy images_modify_by_project on public.images
   for update using (
     exists (select 1 from public.projects pr where pr.id = images.project_id and (pr.user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')))
   );
 
-create policy if not exists images_delete_by_project on public.images
+drop policy if exists images_delete_by_project on public.images;
+create policy images_delete_by_project on public.images
   for delete using (
     exists (select 1 from public.projects pr where pr.id = images.project_id and (pr.user_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')))
   );
