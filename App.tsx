@@ -1,5 +1,8 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
+import { useAuth } from './context/AuthProvider';
+import { Login } from './components/Login';
+import { signOut } from './services/auth';
 import { ImageCard } from './components/ImageCard';
 import { processImageBatch, retouchImage, analyzeImageContent } from './services/geminiService';
 import type { ImageFile, BatchHistoryEntry, DealershipBackground, VehicleType, Spin360Set } from './types';
@@ -31,6 +34,7 @@ import { UploadIcon } from './components/icons/UploadIcon';
 import { HistoryButton } from './components/HistoryButton';
 import { BackgroundUpload } from './components/BackgroundUpload';
 import { ProjectsView } from './components/ProjectsView';
+import { AdminPanel } from './components/admin/AdminPanel';
 
 // Type definition for JSZip library loaded from CDN
 // This is a simplified interface covering the methods we actually use
@@ -66,6 +70,7 @@ const getFileExtensionFromMimeType = (mimeType: string): string => {
 
 // FIX: Removed React.FC type annotation to fix component type inference error.
 const App = () => {
+  const { loading: authLoading, user } = useAuth();
   const [images, setImages] = useState<ImageFile[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -84,6 +89,7 @@ const App = () => {
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [dealershipBackground, setDealershipBackground] = useState<DealershipBackground | null>(null);
   const [viewMode, setViewMode] = useState<'projects' | 'queue'>('projects'); // New: View switcher
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   
   const pauseRef = useRef(isPaused);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +98,12 @@ const App = () => {
   useEffect(() => {
     pauseRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    const handler = () => setIsAdminOpen(true);
+    window.addEventListener('open-admin', handler as EventListener);
+    return () => window.removeEventListener('open-admin', handler as EventListener);
+  }, []);
   
   // Warn user before closing/refreshing page while processing
   useEffect(() => {
@@ -654,7 +666,7 @@ const App = () => {
     return { total, completed, failed, pending };
   }, [images]);
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
@@ -663,6 +675,10 @@ const App = () => {
         </div>
       </div>
     );
+  }
+
+  if (!user) {
+    return <Login />;
   }
 
   return (
@@ -913,6 +929,7 @@ const App = () => {
           onRetouch={handleRetouchImage}
         />
       )}
+      {isAdminOpen && <AdminPanel onClose={() => setIsAdminOpen(false)} />}
     </div>
   );
 };

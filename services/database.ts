@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { BatchHistoryEntry, ImageFile } from '../types';
+import { getProfile } from './auth';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -54,12 +55,18 @@ export class DatabaseService {
     if (!db) throw new Error('Supabase not configured');
 
     try {
-      // Upsert project
+      // Resolve current user profile for ownership & dealership
+      const profile = await getProfile();
+      if (!profile) throw new Error('Not authenticated');
+
+      // Upsert project (RLS requires user_id = auth.uid())
       const { error: projectError } = await db
         .from('projects')
         .upsert({
           id: project.id,
           name: project.name,
+          user_id: profile.id,
+          dealership_id: profile.dealership_id,
           created_at: new Date(project.timestamp).toISOString(),
           updated_at: new Date().toISOString(),
         });

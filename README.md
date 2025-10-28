@@ -1,20 +1,72 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# CarStudioAI
 
-# Run and deploy your AI Studio app
+Modern AI-assisted vehicle photo studio with queue processing, 360° capture, and persistent projects. Built with React + Vite + Tailwind, powered by Gemini and Supabase (hybrid IndexedDB fallback).
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1PnyCsiN_o97paoA1amFFd2opZciDHJma
+- Photo queue with progress and retry
+- 360° capture workflow with vehicle presets
+- AI retouching and background compositing
+- Projects view with history and restore
+- Supabase-backed persistence with IndexedDB fallback
+- Optional dealership background per project
 
-## Run Locally
+## Getting started
 
-**Prerequisites:**  Node.js
+Prerequisites:
+- Node.js 20+
+- Supabase project (free tier works)
 
+Install dependencies:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+```
+
+Environment variables (create `.env.local`):
+
+```bash
+VITE_GEMINI_API_KEY=your_gemini_api_key
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+Dev server:
+
+```bash
+npm run dev
+```
+
+Production build:
+
+```bash
+npm run build
+```
+
+## Supabase setup
+
+1) Apply database schema in `db/schema.sql` (projects, images) and `db/auth.sql` (profiles, dealerships, RLS).
+2) In Authentication → Providers, enable Email (magic link or email+password).
+3) Environment variables above must be set in Vercel for Production/Preview.
+
+## Auth and roles
+
+- The first account to sign up becomes admin automatically.
+- Admins can manage dealerships and assign users.
+- Regular users see and manage only their own projects.
+
+## Scripts
+
+- `npm run dev` — run locally
+- `npm run build` — build for production
+- `npm run lint` — lint sources
+- `npm run format` — format with Prettier
+
+## Contributing
+
+- Open PRs against `main`. CI runs build checks.
+- Use Prettier and ESLint configs in repo.
+
+## License
+
+MIT (see `LICENSE`)

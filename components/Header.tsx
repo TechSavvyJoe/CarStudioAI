@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { CameraIcon } from './icons/CameraIcon';
+import { useAuth } from '../context/AuthProvider';
+import { signOut } from '../services/auth';
 
 interface HeaderProps {
   viewMode?: 'projects' | 'queue';
@@ -22,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="relative py-3 sm:py-6 border-b border-gray-700/30 bg-gradient-to-b from-gray-900 via-gray-900/95 to-gray-900/50 backdrop-blur-xl sticky top-0 z-20 shadow-2xl">
       <div className="container mx-auto px-3 sm:px-6">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
+          
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20 flex-shrink-0">
               <CameraIcon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
@@ -88,9 +91,37 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
           )}
+          {/* Right-side user actions */}
+          <UserControls />
         </div>
       </div>
     </header>
   );
 };
 
+const UserControls: React.FC = () => {
+  const { user } = useAuth();
+  return (
+    <div className="flex items-center gap-2">
+      {user?.role === 'admin' && (
+        <a
+          href="#admin"
+          className="px-3 py-1.5 bg-gray-800/80 rounded-lg text-sm text-gray-200 hover:bg-gray-700/80 border border-gray-700/50"
+          onClick={(e) => {
+            e.preventDefault();
+            const ev = new CustomEvent('open-admin');
+            window.dispatchEvent(ev);
+          }}
+        >
+          Admin
+        </a>
+      )}
+      <button
+        onClick={() => signOut()}
+        className="px-3 py-1.5 bg-gray-800/80 rounded-lg text-sm text-gray-200 hover:bg-gray-700/80 border border-gray-700/50"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+};
