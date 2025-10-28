@@ -31,6 +31,11 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+Security note:
+- Do NOT commit environment files containing secrets into the repository. I removed checked-in `.env.production` and `.env.temp` from this repo and added `.env*` to `.gitignore`.
+- Store runtime secrets (Supabase anon and service_role keys, Gemini keys) in your hosting provider (Vercel) or a secrets vault and never check them in.
+- If any keys were committed previously, rotate them immediately in the Supabase dashboard and update Vercel environment variables.
+
 Dev server:
 
 ```bash

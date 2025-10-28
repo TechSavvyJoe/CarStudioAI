@@ -1,3 +1,16 @@
+# Ignore local environment files
+.env
+.env.*
+.env.local
+.env.production
+.env.temp
+
+# Ignore temporary credentials
+.tmp_new_test_creds
+
+# Node modules and build outputs
+node_modules/
+dist/
 # Logs
 logs
 *.log
