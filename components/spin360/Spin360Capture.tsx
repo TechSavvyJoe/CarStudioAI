@@ -440,23 +440,7 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
                 {autoCapture ? 'Auto' : 'Manual'}
               </button>
 
-              {/* Center: Shutter Button */}
-              <button
-                onClick={autoCapture ? undefined : captureImage}
-                disabled={autoCapture || isCapturing}
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-white shadow-2xl transition-all flex items-center justify-center ${
-                  autoCapture && isAligned
-                    ? 'bg-red-600 animate-pulse'
-                    : autoCapture
-                    ? 'bg-gray-600 opacity-50'
-                    : 'bg-red-600 hover:bg-red-700 active:scale-95'
-                }`}
-                aria-label="Capture photo"
-              >
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-white" />
-              </button>
-
-              {/* Right: Done Button */}
+              {/* Center: Done Button */}
               <button
                 onClick={handleComplete}
                 disabled={capturedIndices.size < 8}
@@ -467,6 +451,22 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
                 }`}
               >
                 Done
+              </button>
+
+              {/* Right: Red Shutter Button */}
+              <button
+                onClick={autoCapture ? undefined : captureImage}
+                disabled={autoCapture || isCapturing}
+                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-white shadow-2xl transition-all flex items-center justify-center ${
+                  autoCapture && isAligned
+                    ? 'bg-red-600 animate-pulse'
+                    : autoCapture
+                    ? 'bg-red-600 opacity-50'
+                    : 'bg-red-600 hover:bg-red-700 active:scale-95'
+                }`}
+                aria-label="Capture photo"
+              >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 rounded-full border-2 border-white" />
               </button>
             </div>
           </div>

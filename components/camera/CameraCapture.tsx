@@ -704,7 +704,8 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
         </div>
         
         {/* Controls Row */}
-        <div className="flex items-center justify-center gap-3 sm:gap-4 mt-2 sm:mt-3">
+        <div className="flex items-center justify-between w-full px-4 mt-2 sm:mt-3">
+            {/* Left: Camera Switch */}
             <button
               onClick={toggleFacingMode}
               className="p-2.5 sm:p-3 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
@@ -713,14 +714,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
               <CameraRotateIcon className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <button
-              onClick={handleCapture}
-              className="w-16 h-16 sm:w-20 sm:h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-white shadow-2xl transition-transform duration-200 hover:scale-110 active:scale-95"
-              aria-label="Capture photo"
-            >
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500 rounded-full border-2 border-white"></div>
-            </button>
-
+            {/* Center: Done Button */}
             <button
               onClick={handleCaptureComplete}
               disabled={capturedImages.length === 0}
@@ -732,6 +726,15 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
               aria-label="Finish photoshoot"
             >
               Done ({capturedImages.length})
+            </button>
+
+            {/* Right: Red Shutter Button */}
+            <button
+              onClick={handleCapture}
+              className="w-16 h-16 sm:w-20 sm:h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-white shadow-2xl transition-transform duration-200 hover:scale-110 active:scale-95"
+              aria-label="Capture photo"
+            >
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500 rounded-full border-2 border-white"></div>
             </button>
         </div>
       </div>
