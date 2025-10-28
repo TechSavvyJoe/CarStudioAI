@@ -6,7 +6,8 @@ import * as IndexedDBUtils from './db';
 
 let useDatabase = true; // Try database first
 
-export async function saveBatchHistory(entry: BatchHistoryEntry): Promise<void> {
+// History (Projects) API - align with utils/db.ts naming
+export async function addHistoryEntry(entry: BatchHistoryEntry): Promise<void> {
   if (useDatabase) {
     try {
       await DatabaseService.saveProject(entry);
@@ -16,12 +17,11 @@ export async function saveBatchHistory(entry: BatchHistoryEntry): Promise<void> 
       useDatabase = false;
     }
   }
-  
   // Fallback to IndexedDB
-  return IndexedDBUtils.saveBatchHistory(entry);
+  return IndexedDBUtils.addHistoryEntry(entry);
 }
 
-export async function loadBatchHistory(): Promise<BatchHistoryEntry[]> {
+export async function getHistory(): Promise<BatchHistoryEntry[]> {
   if (useDatabase) {
     try {
       const projects = await DatabaseService.loadProjects();
@@ -29,7 +29,7 @@ export async function loadBatchHistory(): Promise<BatchHistoryEntry[]> {
         return projects;
       }
       // If database is empty, try loading from IndexedDB and migrating
-      const localProjects = await IndexedDBUtils.loadBatchHistory();
+      const localProjects = await IndexedDBUtils.getHistory();
       if (localProjects.length > 0) {
         console.log('Migrating', localProjects.length, 'projects from IndexedDB to database...');
         for (const project of localProjects) {
@@ -43,12 +43,11 @@ export async function loadBatchHistory(): Promise<BatchHistoryEntry[]> {
       useDatabase = false;
     }
   }
-  
   // Fallback to IndexedDB
-  return IndexedDBUtils.loadBatchHistory();
+  return IndexedDBUtils.getHistory();
 }
 
-export async function deleteBatchHistory(id: string): Promise<void> {
+export async function deleteHistoryEntry(id: string): Promise<void> {
   if (useDatabase) {
     try {
       await DatabaseService.deleteProject(id);
@@ -58,18 +57,15 @@ export async function deleteBatchHistory(id: string): Promise<void> {
       useDatabase = false;
     }
   }
-  
   // Fallback to IndexedDB
-  return IndexedDBUtils.deleteBatchHistory(id);
+  return IndexedDBUtils.deleteHistoryEntry(id);
 }
 
-// Re-export other functions from IndexedDB utils
-export const {
-  saveImages,
-  loadImages,
-  updateImageStatus,
-  clearAllImages,
-  saveDealershipBackground,
-  loadDealershipBackground,
-  deleteDealershipBackground,
-} = IndexedDBUtils;
+// Re-export other functions from IndexedDB utils with original names
+export const saveImages = IndexedDBUtils.saveImages;
+export const getImages = IndexedDBUtils.getImages;
+export const clearImages = IndexedDBUtils.clearImages;
+
+export const saveDealershipBackground = IndexedDBUtils.saveDealershipBackground;
+export const getDealershipBackground = IndexedDBUtils.getDealershipBackground;
+export const clearDealershipBackground = IndexedDBUtils.clearDealershipBackground;

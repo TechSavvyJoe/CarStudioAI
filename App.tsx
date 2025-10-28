@@ -20,7 +20,7 @@ import {
   getDealershipBackground,
   saveDealershipBackground,
   clearDealershipBackground
-} from './utils/db';
+} from './utils/dbHybrid';
 import { HistoryPanel } from './components/HistoryPanel';
 import { CameraCapture } from './components/camera/CameraCapture';
 import { Spin360Capture } from './components/spin360/Spin360Capture';
