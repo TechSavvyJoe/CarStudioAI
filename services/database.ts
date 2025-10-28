@@ -1,42 +1,57 @@
-import { sql } from '@vercel/postgres';
+import { createClient } from '@supabase/supabase-js';
 import type { BatchHistoryEntry, ImageFile } from '../types';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabase() {
+  if (!supabase && supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+}
 
 export class DatabaseService {
   // Save project with images
   static async saveProject(project: BatchHistoryEntry): Promise<void> {
+    const db = getSupabase();
+    if (!db) throw new Error('Supabase not configured');
+
     try {
-      // Insert or update project
-      await sql`
-        INSERT INTO projects (id, name, created_at, updated_at)
-        VALUES (${project.id}, ${project.name}, ${new Date(project.timestamp).toISOString()}, NOW())
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          updated_at = NOW()
-      `;
+      // Upsert project
+      const { error: projectError } = await db
+        .from('projects')
+        .upsert({
+          id: project.id,
+          name: project.name,
+          created_at: new Date(project.timestamp).toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (projectError) throw projectError;
 
       // Delete existing images for this project
-      await sql`DELETE FROM images WHERE project_id = ${project.id}`;
+      await db.from('images').delete().eq('project_id', project.id);
 
       // Insert all images
-      for (const image of project.images) {
-        await sql`
-          INSERT INTO images (
-            id, project_id, original_url, processed_url, ai_generated_name,
-            status, error, spin360_index, created_at, updated_at
-          ) VALUES (
-            ${image.id},
-            ${project.id},
-            ${image.originalUrl},
-            ${image.processedUrl || null},
-            ${image.aiGeneratedName || null},
-            ${image.status},
-            ${image.error || null},
-            ${image.spin360Index !== undefined ? image.spin360Index : null},
-            NOW(),
-            NOW()
-          )
-        `;
-      }
+      const imagesToInsert = project.images.map(image => ({
+        id: image.id,
+        project_id: project.id,
+        original_url: image.originalUrl,
+        processed_url: image.processedUrl || null,
+        ai_generated_name: image.aiGeneratedName || null,
+        status: image.status,
+        error: image.error || null,
+        spin360_index: image.spin360Index !== undefined ? image.spin360Index : null,
+      }));
+
+      const { error: imagesError } = await db
+        .from('images')
+        .insert(imagesToInsert);
+
+      if (imagesError) throw imagesError;
     } catch (error) {
       console.error('Failed to save project to database:', error);
       throw error;
@@ -45,28 +60,34 @@ export class DatabaseService {
 
   // Load all projects
   static async loadProjects(): Promise<BatchHistoryEntry[]> {
+    const db = getSupabase();
+    if (!db) return [];
+
     try {
-      const { rows: projects } = await sql`
-        SELECT id, name, created_at
-        FROM projects
-        ORDER BY created_at DESC
-      `;
+      const { data: projects, error: projectsError } = await db
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (projectsError) throw projectsError;
+      if (!projects) return [];
 
       const result: BatchHistoryEntry[] = [];
 
       for (const project of projects) {
-        const { rows: images } = await sql`
-          SELECT *
-          FROM images
-          WHERE project_id = ${project.id}
-          ORDER BY created_at ASC
-        `;
+        const { data: images, error: imagesError } = await db
+          .from('images')
+          .select('*')
+          .eq('project_id', project.id)
+          .order('created_at', { ascending: true });
 
-        const imageFiles: ImageFile[] = images.map(img => ({
+        if (imagesError) throw imagesError;
+
+        const imageFiles: ImageFile[] = (images || []).map((img: any) => ({
           id: img.id,
           originalUrl: img.original_url,
           processedUrl: img.processed_url || undefined,
-          originalFile: new File([], 'placeholder.jpg'), // Placeholder since we can't reconstruct File object
+          originalFile: new File([], 'placeholder.jpg'),
           aiGeneratedName: img.ai_generated_name || undefined,
           status: img.status as ImageFile['status'],
           error: img.error || undefined,
@@ -78,6 +99,7 @@ export class DatabaseService {
           name: project.name,
           timestamp: new Date(project.created_at).getTime(),
           images: imageFiles,
+          imageCount: imageFiles.length,
         });
       }
 
@@ -90,52 +112,19 @@ export class DatabaseService {
 
   // Delete project
   static async deleteProject(projectId: string): Promise<void> {
+    const db = getSupabase();
+    if (!db) throw new Error('Supabase not configured');
+
     try {
-      await sql`DELETE FROM projects WHERE id = ${projectId}`;
+      const { error } = await db
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) throw error;
     } catch (error) {
       console.error('Failed to delete project from database:', error);
       throw error;
-    }
-  }
-
-  // Initialize database (create tables if they don't exist)
-  static async initialize(): Promise<void> {
-    try {
-      await sql`
-        CREATE TABLE IF NOT EXISTS projects (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `;
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS images (
-          id TEXT PRIMARY KEY,
-          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          original_url TEXT NOT NULL,
-          processed_url TEXT,
-          ai_generated_name TEXT,
-          status TEXT NOT NULL,
-          error TEXT,
-          spin360_index INTEGER,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS idx_images_project_id ON images(project_id)
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS idx_images_spin360 ON images(spin360_index) WHERE spin360_index IS NOT NULL
-      `;
-
-      console.log('✅ Database initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize database:', error);
     }
   }
 }
