@@ -31,7 +31,7 @@
     background: linear-gradient(to right, #2d3748 8%, #4a5568 18%, #2d3748 33%);
     background-size: 2000px 100%;
   }
-  
+
   /* Animations for Image Viewer Modal */
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -74,7 +74,7 @@
   .animate-focus {
       animation: focus-animation 1.5s ease-out forwards;
   }
-  
+
   /* Animation for completed card */
   @keyframes flash-success {
     0% {
@@ -102,7 +102,7 @@
   .animate-breathing-glow {
     animation: breathing-glow 3s infinite ease-in-out;
   }
-  
+
   /* Animation for shutter effect */
   @keyframes shutter-burst {
     0% {
@@ -143,6 +143,7 @@
     align-items: center;
     justify-content: center;
     cursor: ew-resize;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     z-index: 30;

@@ -23,7 +23,8 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({ select
                             ? 'border-blue-400 bg-gray-600/80'
                             : 'border-gray-700 bg-gray-900/60 hover:border-blue-500'
                     }`}
-                    aria-pressed={isSelected}
+                    aria-pressed={isSelected ? 'true' : 'false'}
+                    aria-label={`${type.label}${isSelected ? ' selected' : ''}`}
                 >
                     <Icon className={`w-10 h-8 ${isSelected ? 'text-white' : 'text-gray-300'}`} />
                     <span className={`text-[10px] font-semibold mt-1 text-center ${isSelected ? 'text-white' : 'text-gray-300'}`}>
