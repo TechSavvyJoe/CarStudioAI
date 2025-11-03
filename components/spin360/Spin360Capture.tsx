@@ -3,6 +3,7 @@ import type { ImageFile, VehicleType, Spin360Set } from '../../types';
 import { CameraIcon } from '../icons/CameraIcon';
 import { XIcon } from '../icons/XIcon';
 import { shutterSoundDataUrl } from '../../assets/shutterSound';
+import { logger } from '../../utils/logger';
 import {
   TOTAL_ANGLES,
   getTargetAngle,
@@ -95,7 +96,7 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
           videoRef.current.srcObject = mediaStream;
         }
       } catch (error) {
-        console.error('Camera access error:', error);
+        logger.error('Camera access error:', error);
         alert('Cannot access camera. Please grant camera permissions.');
       }
     };
@@ -234,7 +235,7 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
           });
         },
         (error) => {
-          console.warn('GPS error:', error);
+          logger.warn('GPS error:', error);
         },
         {
           enableHighAccuracy: true,
@@ -321,7 +322,7 @@ export const Spin360Capture: React.FC<Spin360CaptureProps> = ({
       }, 'image/jpeg', 0.95);
       
     } catch (error) {
-      console.error('Capture error:', error);
+      logger.error('Capture error:', error);
       setIsCapturing(false);
     }
   }, [isCapturing, targetIndex, capturedIndices, capturedImages]);

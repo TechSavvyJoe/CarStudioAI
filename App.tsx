@@ -13,12 +13,12 @@ import { ProgressBar } from './components/ProgressBar';
 import { QueueStatus } from './components/QueueStatus';
 import { PauseIcon } from './components/icons/PauseIcon';
 import { PlayIcon } from './components/icons/PlayIcon';
-import { 
-  getImages, 
-  saveImages, 
-  clearImages, 
-  getHistory, 
-  addHistoryEntry, 
+import {
+  getImages,
+  saveImages,
+  clearImages,
+  getHistory,
+  addHistoryEntry,
   deleteHistoryEntry,
   getDealershipBackground,
   saveDealershipBackground,
@@ -35,6 +35,10 @@ import { HistoryButton } from './components/HistoryButton';
 import { BackgroundUpload } from './components/BackgroundUpload';
 import { ProjectsView } from './components/ProjectsView';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { EnvWarning } from './components/EnvWarning';
+import { logger } from './utils/logger';
+import { getSafeErrorMessage } from './utils/errorSanitizer';
+import { sanitizeBatchName } from './utils/filenameSanitizer';
 
 // Type definition for JSZip library loaded from CDN
 // This is a simplified interface covering the methods we actually use
@@ -90,7 +94,7 @@ const App = () => {
   const [dealershipBackground, setDealershipBackground] = useState<DealershipBackground | null>(null);
   const [viewMode, setViewMode] = useState<'projects' | 'queue'>('projects'); // New: View switcher
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  
+
   const pauseRef = useRef(isPaused);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -104,18 +108,20 @@ const App = () => {
     window.addEventListener('open-admin', handler as EventListener);
     return () => window.removeEventListener('open-admin', handler as EventListener);
   }, []);
-  
+
   // Warn user before closing/refreshing page while processing
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Check if there are any images currently being processed
-      const hasProcessingImages = images.some(img => 
-        img.status === 'processing' || 
-        img.status === 'queued' || 
-        img.status === 'pending'
+      // Check if there are any images currently being processed or paused
+      const hasProcessingImages = images.some(img =>
+        img.status === 'processing' ||
+        img.status === 'queued' ||
+        img.status === 'pending' ||
+        img.status === 'paused'
       );
-      
-      if (hasProcessingImages && isProcessing && !isPaused) {
+
+      // Warn if images are processing or paused (they'll resume when user returns)
+      if (hasProcessingImages && (isProcessing || isPaused)) {
         e.preventDefault();
         e.returnValue = 'You have images still processing. If you leave now, processing will stop. Are you sure?';
         return e.returnValue;
@@ -125,7 +131,7 @@ const App = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [images, isProcessing, isPaused]);
-  
+
   // Load initial state from IndexedDB on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -146,9 +152,9 @@ const App = () => {
         setDealershipBackground(dbBackground);
 
       } catch (error) {
-        console.error("Failed to load data from IndexedDB:", error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load your saved data';
-        setLoadError(`Unable to load data: ${errorMessage}. If this persists, try clearing your browser cache.`);
+        logger.error("Failed to load data from IndexedDB:", error);
+        const safeErrorMessage = getSafeErrorMessage(error);
+        setLoadError(`Unable to load data: ${safeErrorMessage}. If this persists, try clearing your browser cache.`);
         // Set empty state but allow app to continue functioning
         setImages([]);
         setBatchHistory([]);
@@ -159,7 +165,7 @@ const App = () => {
     };
     loadData();
   }, []);
-  
+
   // Cleanup blob URLs on component unmount ONLY
   // Do NOT add dependencies - we only want to clean up when the component unmounts
   // This prevents revoking URLs while they're still being used by the ImageViewer
@@ -174,7 +180,7 @@ const App = () => {
       }
     };
   }, []);
-  
+
   // Keyboard navigation for ImageViewer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -202,19 +208,19 @@ const App = () => {
       const newImages = typeof updater === 'function' ? updater(currentImages) : updater;
       // Persist to DB. We don't need to await this for UI updates to proceed.
       saveImages(newImages).catch(err => {
-        console.error("Failed to save images to IndexedDB:", err);
+        logger.error("Failed to save images to IndexedDB:", err);
       });
       return newImages;
     });
   }, []); // Empty dependency array ensures this function is stable.
-  
+
   const startProcessing = useCallback(async (imagesToProcess: ImageFile[]) => {
      setIsProcessing(true);
      setIsPaused(false); // Ensure queue is not paused on new upload
 
      try {
        await processImageBatch(
-         imagesToProcess, 
+         imagesToProcess,
          (updatedImage) => {
            // The onUpdate callback from the service now uses our safe state updater.
            updateAndPersistImages((prevImages) =>
@@ -227,7 +233,7 @@ const App = () => {
          dealershipBackground || undefined
        );
      } catch (error) {
-       console.error('An unexpected error occurred during batch processing:', error);
+       logger.error('An unexpected error occurred during batch processing:', error);
      } finally {
        setIsProcessing(false);
      }
@@ -235,7 +241,7 @@ const App = () => {
 
   const handleFilesSelected = useCallback(async (files: FileList) => {
     const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
-    
+
     // Create image files - AI labeling will happen during processing now
     const newImageFiles: ImageFile[] = fileArray.map(file => ({
       id: `${file.name}-${Date.now()}`,
@@ -250,12 +256,12 @@ const App = () => {
     if (newImageFiles.length > 0) {
       setCurrentBatchId(null); // New upload means it's an unsaved batch
       updateAndPersistImages(prev => [...prev, ...newImageFiles]);
-      
+
       // Start processing immediately - AI labeling happens automatically during processing
       await startProcessing(newImageFiles);
     }
   }, [updateAndPersistImages, startProcessing]);
-  
+
   const handleImagesCaptured = useCallback(async (capturedFiles: File[]) => {
     setIsCameraOpen(false);
     const newImageFiles: ImageFile[] = capturedFiles.map((file) => ({
@@ -270,17 +276,17 @@ const App = () => {
 
     setCurrentBatchId(null); // New capture means it's an unsaved batch
     updateAndPersistImages(prev => [...prev, ...newImageFiles]);
-    
+
     // Start processing immediately - AI labeling happens automatically during processing
     await startProcessing(newImageFiles);
   }, [updateAndPersistImages, startProcessing]);
 
   const handle360Complete = useCallback(async (spin360Set: Spin360Set) => {
     setIs360CameraOpen(false);
-    
+
     // Add all captured 360 images to the queue
     updateAndPersistImages(prev => [...prev, ...spin360Set.images]);
-    
+
     // Start processing immediately - AI labeling happens automatically during processing
     await startProcessing(spin360Set.images);
   }, [updateAndPersistImages, startProcessing]);
@@ -289,7 +295,7 @@ const App = () => {
   const handleReprocessImage = useCallback(async (imageId: string) => {
     const imageToReprocess = images.find(img => img.id === imageId);
     if (!imageToReprocess || isProcessing) return;
-    
+
     // Reset image to pending state with cleared processed URL
     const resetImage: ImageFile = {
       ...imageToReprocess,
@@ -297,12 +303,12 @@ const App = () => {
       processedUrl: null,
       error: null
     };
-    
+
     // Clean up old processed blob URL
     if (imageToReprocess.processedUrl) {
       URL.revokeObjectURL(imageToReprocess.processedUrl);
     }
-    
+
     // Update state with reset image
     updateAndPersistImages(prevImages =>
       prevImages.map(img =>
@@ -316,7 +322,7 @@ const App = () => {
     try {
       // Re-use the batch processor with the reset image
       await processImageBatch(
-        [resetImage], 
+        [resetImage],
         (updatedImage) => {
            updateAndPersistImages((prevImages) =>
              prevImages.map((img) =>
@@ -328,13 +334,13 @@ const App = () => {
         dealershipBackground || undefined
       );
     } catch (error) {
-      console.error(`An unexpected error occurred during re-processing image ${imageId}:`, error);
+      logger.error(`An unexpected error occurred during re-processing image ${imageId}:`, error);
       // The service's onUpdate callback handles setting the error state on the image.
     } finally {
       setIsProcessing(false);
     }
   }, [images, isProcessing, updateAndPersistImages, dealershipBackground]);
-  
+
   const handleRetouchImage = useCallback(async (imageId: string, prompt: string) => {
     const imageToRetouch = images.find(img => img.id === imageId);
     if (!imageToRetouch || imageToRetouch.status !== 'completed') return;
@@ -354,7 +360,7 @@ const App = () => {
         (updatedImage) => {
           // Close the viewer if the currently viewed image is the one being retouched
           if (currentImageIndex !== null && images[currentImageIndex]?.id === updatedImage.id && updatedImage.status !== 'retouching') {
-            setCurrentImageIndex(null); 
+            setCurrentImageIndex(null);
           }
           updateAndPersistImages((prevImages) => {
             const freshImages = prevImages.map((img) =>
@@ -370,7 +376,7 @@ const App = () => {
         }
       );
     } catch (error) {
-      console.error(`An unexpected error occurred during retouching image ${imageId}:`, error);
+      logger.error(`An unexpected error occurred during retouching image ${imageId}:`, error);
     }
   }, [images, updateAndPersistImages, currentImageIndex]);
 
@@ -382,13 +388,13 @@ const App = () => {
       name: file.name,
       uploadedAt: Date.now(),
     };
-    
+
     setDealershipBackground(newBackground);
-    
+
     try {
       await saveDealershipBackground(newBackground);
     } catch (error) {
-      console.error('Failed to save dealership background:', error);
+      logger.error('Failed to save dealership background:', error);
     }
   }, []);
 
@@ -396,13 +402,13 @@ const App = () => {
     if (dealershipBackground?.url) {
       URL.revokeObjectURL(dealershipBackground.url);
     }
-    
+
     setDealershipBackground(null);
-    
+
     try {
       await clearDealershipBackground();
     } catch (error) {
-      console.error('Failed to clear dealership background:', error);
+      logger.error('Failed to clear dealership background:', error);
     }
   }, [dealershipBackground]);
 
@@ -411,8 +417,8 @@ const App = () => {
     if (!processedImagesExist) return;
 
     if (window.confirm('Do you want to save the current batch to your history before clearing it?')) {
-        const finalBatchName = batchName.trim() || `Batch from ${new Date().toLocaleDateString()}`;
-        
+        const finalBatchName = sanitizeBatchName(batchName) || `Batch from ${new Date().toLocaleDateString()}`;
+
         const newHistoryEntry: BatchHistoryEntry = {
             id: `batch-${Date.now()}`,
             name: finalBatchName,
@@ -433,15 +439,15 @@ const App = () => {
     if (images.length > 0) {
       await handleSaveToHistory();
     }
-    
+
     images.forEach(image => {
       if (image.originalUrl) URL.revokeObjectURL(image.originalUrl);
       if (image.processedUrl) URL.revokeObjectURL(image.processedUrl);
     });
-    
+
     // This now safely clears state and persists to the DB by saving an empty array.
     updateAndPersistImages([]);
-    // FIX: Removed redundant explicit call to `clearImages()`, as `updateAndPersistImages([])` 
+    // FIX: Removed redundant explicit call to `clearImages()`, as `updateAndPersistImages([])`
     // effectively does the same thing by calling `saveImages([])`.
 
     setDownloadError(null);
@@ -453,7 +459,7 @@ const App = () => {
   const handleTogglePause = () => {
     setIsPaused(prevState => !prevState);
   };
-  
+
   const handleLoadBatch = async (batchId: string) => {
     if (images.length > 0 && !window.confirm('This will replace your current queue. Are you sure you want to proceed?')) {
         return;
@@ -476,7 +482,7 @@ const App = () => {
             try {
               processedUrl = URL.createObjectURL(dataUrlToBlob(img.processedUrl));
             } catch (err) {
-              console.error('Failed to restore processed image:', err);
+              logger.error('Failed to restore processed image:', err);
               // Continue without processed URL - original is still available
             }
           }
@@ -515,7 +521,7 @@ const App = () => {
 
       return new Blob([u8arr], { type: mime });
     } catch (err) {
-      console.error('Error converting data URL to blob:', err);
+      logger.error('Error converting data URL to blob:', err);
       throw new Error(`Failed to parse image data: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
@@ -561,7 +567,7 @@ const App = () => {
     setIsDownloading(true);
     setDownloadProgress(0);
 
-    const finalBatchName = batchName.trim() || 'processed-car-photos';
+    const finalBatchName = sanitizeBatchName(batchName) || 'processed-car-photos';
     const zipFileName = `${finalBatchName}.zip`;
     const downloadAbortController = new AbortController();
 
@@ -581,16 +587,16 @@ const App = () => {
             }
             const blob = await response.blob();
             const extension = getFileExtensionFromMimeType(blob.type);
-            
+
             // Build filename: BatchName-AI-Description or BatchName-Number if no AI name
             let fileName: string;
-            if (batchName.trim()) {
+            if (finalBatchName && finalBatchName !== 'processed-car-photos') {
               const aiName = image.aiGeneratedName || `Image-${index + 1}`;
-              fileName = `${batchName.trim()}-${aiName}.${extension}`;
+              fileName = `${finalBatchName}-${aiName}.${extension}`;
             } else {
               fileName = `Image-${index + 1}.${extension}`;
             }
-            
+
             zip.file(fileName, blob);
             return fileName;
           } catch (err) {
@@ -606,13 +612,13 @@ const App = () => {
       results.forEach((result: PromiseSettledResult<string>, index: number) => {
         if (result.status === 'rejected') {
           failedCount++;
-          console.error(`Failed to add image ${index + 1} to zip:`, result.reason);
+          logger.error(`Failed to add image ${index + 1} to zip:`, result.reason);
         }
       });
 
       // Warn user if some files failed
       if (failedCount > 0) {
-        console.warn(`${failedCount} of ${completedImages.length} images failed to download`);
+        logger.warn(`${failedCount} of ${completedImages.length} images failed to download`);
       }
 
       // Only proceed if at least one file was added
@@ -643,7 +649,7 @@ const App = () => {
       }
 
     } catch (error) {
-      console.error("Failed to create zip file:", error);
+      logger.error("Failed to create zip file:", error);
       setDownloadError('An error occurred while creating the zip file. Please try again.');
     } finally {
       setIsDownloading(false);
@@ -683,8 +689,9 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
-      <Header 
-        viewMode={viewMode} 
+      <EnvWarning />
+      <Header
+        viewMode={viewMode}
         onViewChange={setViewMode}
         isProcessing={isProcessing}
         processingCount={images.filter(img => img.status === 'processing' || img.status === 'queued').length}
@@ -706,7 +713,7 @@ const App = () => {
           </div>
         </div>
       )}
-      
+
       {/* Conditional rendering based on view mode */}
       {viewMode === 'projects' ? (
         <ProjectsView
@@ -719,9 +726,9 @@ const App = () => {
       ) : (
         <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border border-gray-700">
-          
+
           {images.length === 0 ? (
-            <StartShoot 
+            <StartShoot
               onStart={() => setIsCameraOpen(true)}
               onStart360={() => setIs360CameraOpen(true)}
               onFilesSelected={handleFilesSelected}
@@ -843,7 +850,7 @@ const App = () => {
                   )}
                 </div>
               </div>
-              
+
               <QueueStatus stats={queueStats} />
 
               {/* Dealership Background Section in Queue View */}
@@ -856,8 +863,8 @@ const App = () => {
                   isProcessing={isProcessing}
                 />
                 <p className="text-xs text-gray-400 mt-2">
-                  {dealershipBackground 
-                    ? 'Vehicles will be composited onto your dealership background.' 
+                  {dealershipBackground
+                    ? 'Vehicles will be composited onto your dealership background.'
                     : 'Upload a dealership background to composite vehicles onto your location, or leave blank for a white studio background.'}
                 </p>
               </div>
@@ -872,9 +879,9 @@ const App = () => {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                 {images.map((image, index) => (
-                  <ImageCard 
-                    key={image.id} 
-                    image={image} 
+                  <ImageCard
+                    key={image.id}
+                    image={image}
                     index={index}
                     onReprocess={handleReprocessImage}
                     onOpenViewer={setCurrentImageIndex}
@@ -886,14 +893,14 @@ const App = () => {
         </div>
       </main>
       )}
-      
+
       {/* Footer - only show in queue mode */}
       {viewMode === 'queue' && (
         <footer className="text-center py-6 text-gray-500 text-sm">
           <p>Powered by Gemini. Built for professional results.</p>
         </footer>
       )}
-      
+
       <HistoryPanel
         isOpen={isHistoryPanelOpen}
         onClose={() => setIsHistoryPanelOpen(false)}
@@ -902,12 +909,12 @@ const App = () => {
         onDeleteBatch={handleDeleteBatch}
         currentBatchId={currentBatchId}
       />
-      <HistoryButton 
+      <HistoryButton
         onClick={() => setIsHistoryPanelOpen(true)}
         count={batchHistory.length}
       />
       {isCameraOpen && (
-        <CameraCapture 
+        <CameraCapture
           onClose={() => setIsCameraOpen(false)}
           onCaptureComplete={handleImagesCaptured}
         />

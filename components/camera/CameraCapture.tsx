@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { SHOT_LIST } from './cameraShots';
 import { Spinner } from '../Spinner';
 import { ShutterIcon } from '../icons/ShutterIcon';
+import { logger } from '../../utils/logger';
 import { XIcon } from '../icons/XIcon';
 import { CameraRotateIcon } from '../icons/CameraRotateIcon';
 import { CheckIcon } from '../icons/CheckIcon';
@@ -203,7 +204,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
             window.addEventListener('deviceorientation', handleOrientation);
           }
         })
-        .catch(console.error);
+        .catch(logger.error);
     } else {
       // Non-iOS or older iOS
       window.addEventListener('deviceorientation', handleOrientation);
@@ -320,7 +321,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
         setStreamStarted(true);
       }
     } catch (err) {
-      console.error('Error accessing camera:', err);
+      logger.error('Error accessing camera:', err);
       let message = 'Could not access the camera. ';
       if (err instanceof DOMException) {
           if (err.name === 'AbortError') {
@@ -377,7 +378,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
 
     // Type assertion needed for advanced camera constraints not in standard MediaTrackConstraints
     const constraints = { advanced: [focusConstraint] } as MediaTrackConstraints & { advanced: CameraFocusConstraint[] };
-    track.applyConstraints(constraints).catch(err => console.error('Focus failed', err));
+    track.applyConstraints(constraints).catch(err => logger.error('Focus failed', err));
   }, []);
 
   const toggleFacingMode = useCallback(() => {
@@ -431,7 +432,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
             const sanitizedShotName = img.shotName.toLowerCase().replace(/[^a-z0-9]/g, '-');
             return new File([blob], `capture-${sanitizedShotName}-${index}.jpg`, { type: 'image/jpeg' });
           } catch (error) {
-            console.error(`Failed to convert image ${index}:`, error);
+            logger.error(`Failed to convert image ${index}:`, error);
             throw error;
           }
         })
@@ -443,24 +444,24 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
           if (result.status === 'fulfilled') {
             return result.value;
           } else {
-            console.error(`Image ${index} conversion failed:`, result.reason);
+            logger.error(`Image ${index} conversion failed:`, result.reason);
             return null;
           }
         })
         .filter((file: File | null): file is File => file !== null);
 
       if (files.length === 0) {
-        console.error('No images were successfully converted');
+        logger.error('No images were successfully converted');
         return;
       }
 
       if (files.length < capturedImages.length) {
-        console.warn(`Only ${files.length} of ${capturedImages.length} images were successfully converted`);
+        logger.warn(`Only ${files.length} of ${capturedImages.length} images were successfully converted`);
       }
 
       onCaptureComplete(files);
     } catch (error) {
-      console.error('Error during capture completion:', error);
+      logger.error('Error during capture completion:', error);
     }
   }, [capturedImages, onCaptureComplete]);
   

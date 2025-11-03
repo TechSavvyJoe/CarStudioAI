@@ -1,18 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './auth';
 import type { BatchHistoryEntry, ImageFile } from '../types';
 import { getProfile } from './auth';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-let supabase: ReturnType<typeof createClient> | null = null;
-
-function getSupabase() {
-  if (!supabase && supabaseUrl && supabaseKey) {
-    supabase = createClient(supabaseUrl, supabaseKey);
-  }
-  return supabase;
-}
+import { logger } from '../utils/logger';
 
 export class DatabaseService {
   // Helpers to convert between File/Blob/object URLs and data URLs for cross-login persistence
@@ -51,8 +40,7 @@ export class DatabaseService {
 
   // Save project with images
   static async saveProject(project: BatchHistoryEntry): Promise<void> {
-    const db = getSupabase();
-    if (!db) throw new Error('Supabase not configured');
+    if (!supabase) throw new Error('Supabase not configured');
 
     try {
       // Resolve current user profile for ownership & dealership
@@ -60,7 +48,7 @@ export class DatabaseService {
       if (!profile) throw new Error('Not authenticated');
 
       // Upsert project (RLS requires user_id = auth.uid())
-      const { error: projectError } = await db
+      const { error: projectError } = await supabase
         .from('projects')
         .upsert({
           id: project.id,
@@ -74,7 +62,7 @@ export class DatabaseService {
       if (projectError) throw projectError;
 
       // Delete existing images for this project
-      await db.from('images').delete().eq('project_id', project.id);
+      await supabase.from('images').delete().eq('project_id', project.id);
 
       // Insert all images (encode URLs to data URLs for cross-login persistence)
       const imagesToInsert = await Promise.all(project.images.map(async (image) => {
@@ -84,7 +72,7 @@ export class DatabaseService {
           try {
             originalDataUrl = await DatabaseService.fileToDataUrl(image.originalFile);
           } catch (e) {
-            console.warn('Failed reading original file, falling back to originalUrl:', e);
+            logger.warn('Failed reading original file, falling back to originalUrl:', e);
           }
         }
         if (!originalDataUrl && image.originalUrl) {
@@ -95,7 +83,7 @@ export class DatabaseService {
               originalDataUrl = await DatabaseService.urlToDataUrl(image.originalUrl);
             }
           } catch (e) {
-            console.warn('Failed converting originalUrl to data URL:', e);
+            logger.warn('Failed converting originalUrl to data URL:', e);
           }
         }
 
@@ -109,7 +97,7 @@ export class DatabaseService {
               processedDataUrl = await DatabaseService.urlToDataUrl(image.processedUrl);
             }
           } catch (e) {
-            console.warn('Failed converting processedUrl to data URL:', e);
+            logger.warn('Failed converting processedUrl to data URL:', e);
           }
         }
 
@@ -125,24 +113,23 @@ export class DatabaseService {
         };
       }));
 
-      const { error: imagesError } = await db
+      const { error: imagesError } = await supabase
         .from('images')
         .insert(imagesToInsert);
 
       if (imagesError) throw imagesError;
     } catch (error) {
-      console.error('Failed to save project to database:', error);
+      logger.error('Failed to save project to database:', error);
       throw error;
     }
   }
 
   // Load all projects
   static async loadProjects(): Promise<BatchHistoryEntry[]> {
-    const db = getSupabase();
-    if (!db) return [];
+    if (!supabase) return [];
 
     try {
-      const { data: projects, error: projectsError } = await db
+      const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('*')
         .order('created_at', { ascending: false });
@@ -153,7 +140,7 @@ export class DatabaseService {
       const result: BatchHistoryEntry[] = [];
 
       for (const project of projects) {
-        const { data: images, error: imagesError } = await db
+        const { data: images, error: imagesError } = await supabase
           .from('images')
           .select('*')
           .eq('project_id', project.id)
@@ -171,7 +158,7 @@ export class DatabaseService {
               originalFile = new File([originalBlob], 'original');
               originalUrl = URL.createObjectURL(originalBlob);
             } catch (e) {
-              console.warn('Failed to reconstruct original image from data URL:', e);
+              logger.warn('Failed to reconstruct original image from data URL:', e);
             }
           }
 
@@ -182,7 +169,7 @@ export class DatabaseService {
               const processedBlob = DatabaseService.dataUrlToBlob(img.processed_url);
               processedUrl = URL.createObjectURL(processedBlob);
             } catch (e) {
-              console.warn('Failed to reconstruct processed image from data URL:', e);
+              logger.warn('Failed to reconstruct processed image from data URL:', e);
             }
           }
 
@@ -209,25 +196,24 @@ export class DatabaseService {
 
       return result;
     } catch (error) {
-      console.error('Failed to load projects from database:', error);
+      logger.error('Failed to load projects from database:', error);
       return [];
     }
   }
 
   // Delete project
   static async deleteProject(projectId: string): Promise<void> {
-    const db = getSupabase();
-    if (!db) throw new Error('Supabase not configured');
+    if (!supabase) throw new Error('Supabase not configured');
 
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('projects')
         .delete()
         .eq('id', projectId);
 
       if (error) throw error;
     } catch (error) {
-      console.error('Failed to delete project from database:', error);
+      logger.error('Failed to delete project from database:', error);
       throw error;
     }
   }

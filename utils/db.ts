@@ -1,5 +1,6 @@
 
 import type { ImageFile, ImageStatus, BatchHistoryEntry, DealershipBackground } from '../types';
+import { logger } from './logger';
 
 const DB_NAME = 'AutoBackgroundStudioDB';
 const DB_VERSION = 2;
@@ -67,7 +68,7 @@ async function prepareForStorage(images: ImageFile[]): Promise<any[]> {
                 const blob = await response.blob();
                 storableImage.processedUrl = await blobToDataUrl(blob);
             } catch (error) {
-                console.error("Could not convert blob URL to data URL for storage:", error);
+                logger.error("Could not convert blob URL to data URL for storage:", error);
                 storableImage.processedUrl = null;
             }
         }
@@ -85,7 +86,7 @@ function restoreFromStorage(images: any[]): ImageFile[] {
             try {
                 const parts = restoredImage.processedUrl.split(',');
                 if (parts.length !== 2) {
-                    console.warn('Invalid data URL format, skipping processed image');
+                    logger.warn('Invalid data URL format, skipping processed image');
                     restoredImage.processedUrl = null;
                 } else {
                     const byteString = atob(parts[1]);
@@ -100,7 +101,7 @@ function restoreFromStorage(images: any[]): ImageFile[] {
                     restoredImage.processedUrl = URL.createObjectURL(blob);
                 }
             } catch (error) {
-                console.error('Failed to restore processed image from data URL:', error);
+                logger.error('Failed to restore processed image from data URL:', error);
                 restoredImage.processedUrl = null;
             }
         }
@@ -205,7 +206,7 @@ export async function saveDealershipBackground(background: DealershipBackground)
             const blob = await response.blob();
             storableBackground.url = await blobToDataUrl(blob);
         } catch (error) {
-            console.error("Could not convert blob URL to data URL for background storage:", error);
+            logger.error("Could not convert blob URL to data URL for background storage:", error);
         }
     }
 

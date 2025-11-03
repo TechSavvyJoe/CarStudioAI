@@ -16,9 +16,21 @@ export default defineConfig(({ mode }) => {
     return {
       server: {
         port: 3000,
-        host: '0.0.0.0',
+        host: mode === 'production' ? 'localhost' : '127.0.0.1',
       },
       plugins: [react()],
+      build: {
+        chunkSizeWarningLimit: 1000, // Increase from default 500kb to 1000kb
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'react-vendor': ['react', 'react-dom'],
+              'supabase': ['@supabase/supabase-js'],
+              'gemini': ['@google/genai'],
+            }
+          }
+        }
+      },
       define: {
         // Pass the API key to the browser bundle
         'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || ''),

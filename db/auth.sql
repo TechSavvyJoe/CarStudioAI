@@ -17,7 +17,7 @@ create table if not exists public.profiles (
 -- Add user/dealership to projects
 alter table if exists public.projects
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
-  
+
 alter table if exists public.projects
   add column if not exists dealership_id uuid references public.dealerships(id) on delete set null;
 
@@ -60,7 +60,7 @@ alter table public.projects enable row level security;
 alter table public.images enable row level security;
 
 -- Policies
--- Profiles: users can read/update own; admins all
+-- Profiles: users can read/update/insert own; admins all
 drop policy if exists profiles_self_select on public.profiles;
 create policy profiles_self_select on public.profiles
   for select using (auth.uid() = id or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
@@ -68,6 +68,10 @@ create policy profiles_self_select on public.profiles
 drop policy if exists profiles_self_update on public.profiles;
 create policy profiles_self_update on public.profiles
   for update using (auth.uid() = id or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+drop policy if exists profiles_insert_own on public.profiles;
+create policy profiles_insert_own on public.profiles
+  for insert with check (auth.uid() = id);
 
 -- Dealerships: admins full; users read only their dealership
 drop policy if exists dealerships_admin_all on public.dealerships;
