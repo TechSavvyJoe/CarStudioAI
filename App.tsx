@@ -162,22 +162,39 @@ const App = () => {
         ]);
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
-        const timeoutPromise = new Promise<never>((_, reject) => {
+        const shortTimeoutPromise = new Promise<never>((_, reject) => {
           timeoutId = setTimeout(() => reject(new Error('Database load timeout')), 10000);
         });
 
-        let loadResults: [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+        let loadResults: [ImageFile[], BatchHistoryEntry[], DealershipBackground | null] | null = null;
 
         try {
           loadResults = await Promise.race([
             loadPromise,
-            timeoutPromise,
+            shortTimeoutPromise,
           ]) as [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
         } catch (raceError) {
           if (raceError instanceof Error && raceError.message === 'Database load timeout') {
-            logger.warn('IndexedDB load exceeded 10 seconds, retrying without timeout');
-            setLoadWarning('Still loading your saved projects. This can take a bit longer when many images are saved.');
-            loadResults = await loadPromise;
+            logger.warn('IndexedDB load exceeded 10 seconds, extending wait period');
+            setLoadWarning('Still loading your saved projects. This can take a little longer when many images are saved.');
+
+            const extendedTimeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Database load extended timeout')), 20000)
+            );
+
+            try {
+              loadResults = await Promise.race([
+                loadPromise,
+                extendedTimeoutPromise,
+              ]) as [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+            } catch (extendedError) {
+              if (extendedError instanceof Error && extendedError.message === 'Database load extended timeout') {
+                logger.error('IndexedDB load timed out after extended wait; continuing with empty state');
+                loadResults = null;
+              } else {
+                throw extendedError;
+              }
+            }
           } else {
             throw raceError;
           }
@@ -185,6 +202,14 @@ const App = () => {
           if (timeoutId !== undefined) {
             clearTimeout(timeoutId);
           }
+        }
+
+        if (!loadResults) {
+          setImages([]);
+          setBatchHistory([]);
+          setDealershipBackground(null);
+          setLoadWarning('We could not load your saved projects from this browser. Starting fresh.');
+          return;
         }
 
         const [dbImages, dbHistory, dbBackground] = loadResults;
