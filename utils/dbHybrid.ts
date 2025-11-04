@@ -32,6 +32,10 @@ function shouldRetryDatabase(): boolean {
 }
 
 // History (Projects) API - align with utils/db.ts naming
+function isSupabaseDisabled(error: unknown): boolean {
+  return error instanceof Error && error.message === 'SUPABASE_AUTH_DISABLED';
+}
+
 export async function addHistoryEntry(entry: BatchHistoryEntry): Promise<void> {
   shouldRetryDatabase(); // Check if we should retry database
 
@@ -42,6 +46,13 @@ export async function addHistoryEntry(entry: BatchHistoryEntry): Promise<void> {
         retryCount = 0; // Reset retry count on success
         return;
       } catch (error) {
+        if (isSupabaseDisabled(error)) {
+          logger.info('[dbHybrid] Supabase disabled; routing saves to IndexedDB');
+          useDatabase = false;
+          lastFailureTime = Date.now();
+          retryCount = MAX_RETRIES;
+          break;
+        }
         logger.warn(`[dbHybrid] Database save failed (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
 
         if (attempt < MAX_RETRIES - 1) {
@@ -85,6 +96,13 @@ export async function getHistory(): Promise<BatchHistoryEntry[]> {
         }
         return [];
       } catch (error) {
+        if (isSupabaseDisabled(error)) {
+          logger.info('[dbHybrid] Supabase disabled; loading history from IndexedDB');
+          useDatabase = false;
+          lastFailureTime = Date.now();
+          retryCount = MAX_RETRIES;
+          break;
+        }
         logger.warn(`[dbHybrid] Database load failed (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
 
         if (attempt < MAX_RETRIES - 1) {
@@ -115,6 +133,13 @@ export async function deleteHistoryEntry(id: string): Promise<void> {
         retryCount = 0; // Reset retry count on success
         return;
       } catch (error) {
+        if (isSupabaseDisabled(error)) {
+          logger.info('[dbHybrid] Supabase disabled; deleting history entry locally only');
+          useDatabase = false;
+          lastFailureTime = Date.now();
+          retryCount = MAX_RETRIES;
+          break;
+        }
         logger.warn(`[dbHybrid] Database delete failed (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
 
         if (attempt < MAX_RETRIES - 1) {

@@ -45,7 +45,10 @@ export class DatabaseService {
     try {
       // Resolve current user profile for ownership & dealership
       const profile = await getProfile();
-      if (!profile) throw new Error('Not authenticated');
+      if (!profile) {
+        logger.info('[DatabaseService] Supabase sync skipped (no authenticated profile)');
+        throw new Error('SUPABASE_AUTH_DISABLED');
+      }
 
       // Upsert project (RLS requires user_id = auth.uid())
       const { error: projectError } = await supabase
@@ -119,6 +122,9 @@ export class DatabaseService {
 
       if (imagesError) throw imagesError;
     } catch (error) {
+      if (error instanceof Error && error.message === 'SUPABASE_AUTH_DISABLED') {
+        throw error;
+      }
       logger.error('Failed to save project to database:', error);
       throw error;
     }
@@ -129,6 +135,12 @@ export class DatabaseService {
     if (!supabase) return [];
 
     try {
+      const profile = await getProfile();
+      if (!profile) {
+        logger.info('[DatabaseService] Supabase project load skipped (no authenticated profile)');
+        throw new Error('SUPABASE_AUTH_DISABLED');
+      }
+
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('*')
@@ -196,8 +208,11 @@ export class DatabaseService {
 
       return result;
     } catch (error) {
+      if (error instanceof Error && error.message === 'SUPABASE_AUTH_DISABLED') {
+        throw error;
+      }
       logger.error('Failed to load projects from database:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -206,6 +221,12 @@ export class DatabaseService {
     if (!supabase) throw new Error('Supabase not configured');
 
     try {
+      const profile = await getProfile();
+      if (!profile) {
+        logger.info('[DatabaseService] Supabase delete skipped (no authenticated profile)');
+        throw new Error('SUPABASE_AUTH_DISABLED');
+      }
+
       const { error } = await supabase
         .from('projects')
         .delete()
@@ -213,6 +234,9 @@ export class DatabaseService {
 
       if (error) throw error;
     } catch (error) {
+      if (error instanceof Error && error.message === 'SUPABASE_AUTH_DISABLED') {
+        throw error;
+      }
       logger.error('Failed to delete project from database:', error);
       throw error;
     }
