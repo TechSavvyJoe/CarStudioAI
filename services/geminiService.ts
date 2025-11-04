@@ -258,24 +258,52 @@ const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): 
 10. VERIFY: NO original pavement/floor visible - 100% dealership ground surface
 11. MAINTAIN: Exact framing - same vehicle size, position, and composition
 
-**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, controls, screens):**
+**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, controls, screens, door panels):**
 1. IGNORE dealership background completely - NOT applicable
-2. Keep interior EXACTLY as photographed - no framing changes
-3. Identify windows/windshield showing exterior
-4. Replace ONLY exterior view through windows with pure white (#FFFFFF)
-5. Keep all interior elements untouched: dashboard, screens, seats, controls
-6. SCREENS/DISPLAYS - CRITICAL PRESERVATION:
-   - Keep digital screens EXACTLY as photographed - no modifications
+2. Keep EVERY interior element at EXACT same size, angle, position, and detail level
+3. CRITICAL - PRESERVE ALL INTERIOR DETAILS:
+   - Door panels: Keep ALL textures, stitching, wood/metal trim, speaker grilles
+   - Window controls: Preserve ALL buttons, switches, and control panels on doors
+   - Armrests, cup holders, storage compartments: Keep intact with all details
+   - Seat materials: Maintain fabric/leather texture, stitching patterns, piping
+   - Dashboard trim: Preserve wood grain, carbon fiber, metal accents exactly
+   - Air vents, door handles, lock buttons: Keep ALL small details visible
+   - Floor mats, pedals, and any visible floor elements: Preserve completely
+   - DO NOT simplify, blur, or remove ANY interior components or details
+4. Windows and Windshield Treatment - NATURAL STUDIO LIGHTING:
+   - Replace exterior view through windows with SOFT DIFFUSED WHITE LIGHT
+   - Create the effect of bright studio softbox lighting coming through windows
+   - Windows should show gentle gradient: brighter at center, slightly darker at edges
+   - Maintain window frame, rubber seals, and all window details
+   - Effect should look like natural daylight through frosted studio windows
+   - DO NOT create solid flat white blocks - use subtle gradients for realism
+5. SCREENS/DISPLAYS - ABSOLUTE PRESERVATION:
+   - Keep digital screens EXACTLY as photographed - zero modifications
    - Backup camera screens: preserve entire display intact
-   - Navigation displays: maintain as-is
-   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, and text
-   - Infotainment screens: keep intact, do NOT split or alter
-   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on screens
+   - Navigation displays: maintain as-is with all graphics/maps
+   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, text, warning lights
+   - Infotainment screens: keep intact, do NOT split, blur, or alter
+   - Climate control displays: keep all numbers and symbols
+   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on ANY screens
    - DO NOT hallucinate or generate new screen content
    - If screen shows text/symbols in original, keep them EXACTLY as they appear
-7. Enhance cabin lighting: bright, even, professional showroom quality
-8. Remove harsh shadows while maintaining depth
-9. CRITICAL: Interior shots use white window background, NOT dealership
+6. Lighting Enhancement - MAINTAIN DEPTH AND DETAIL:
+   - Brighten cabin with soft, even, professional showroom lighting
+   - Preserve all shadows that define shapes and depth (seat contours, dashboard depth)
+   - Remove only harsh, unflattering shadows (like dark spots from overhead lighting)
+   - Ensure lighting reveals texture and detail rather than washing it out
+   - Maintain natural contrast between different materials (leather vs plastic vs metal)
+7. Material Authenticity:
+   - Leather should show natural grain and subtle creasing
+   - Plastic should maintain its sheen and molded details
+   - Metal/chrome should keep reflective properties
+   - Fabric should show weave texture
+8. VERIFY BEFORE OUTPUT:
+   - ALL original interior components are present and detailed
+   - No elements have been simplified, removed, or blurred
+   - Window treatment looks natural, not artificial flat white
+   - All screens and displays are perfectly preserved
+   - Material textures are maintained or enhanced, never degraded
 
 **FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle):**
 1. NOT an exterior vehicle shot - DO NOT use dealership background
@@ -382,20 +410,52 @@ Output: Photo-realistic automotive image that looks professionally shot at the d
 10. VERIFY: NO original ground surface visible - complete white background
 11. CRITICAL: Preserve exact framing - same vehicle size, position, composition as input
 
-**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, center console, controls, displays):**
-1. Keep ALL interior elements at EXACT same size, angle, and position
-2. Identify windows and windshield showing exterior
-3. Replace ONLY the exterior view through windows/windshield with pure white (#FFFFFF)
-4. Keep interior elements completely untouched and in exact same framing
-5. SCREENS/DISPLAYS: Preserve all digital displays intact:
-   - Backup camera screens - keep entire screen visible and functional
-   - Navigation displays - maintain as-is
-   - Instrument cluster - preserve gauges and information
-   - Infotainment screens - keep intact, do NOT split or alter
-6. Enhance cabin lighting: bright, clean, professional showroom illumination
-7. Soften harsh shadows while maintaining depth and dimension
-8. Remove any photographer reflections from interior chrome/screens/glass
-9. CRITICAL: Interior shots use white through windows, maintaining all screen displays
+**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, center console, controls, displays, door panels):**
+1. Keep EVERY interior element at EXACT same size, angle, position, and detail level
+2. CRITICAL - PRESERVE ALL INTERIOR DETAILS:
+   - Door panels: Keep ALL textures, stitching, wood/metal trim, speaker grilles
+   - Window controls: Preserve ALL buttons, switches, and control panels on doors
+   - Armrests, cup holders, storage compartments: Keep intact with all details
+   - Seat materials: Maintain fabric/leather texture, stitching patterns, piping
+   - Dashboard trim: Preserve wood grain, carbon fiber, metal accents exactly
+   - Air vents, door handles, lock buttons: Keep ALL small details visible
+   - Floor mats, pedals, and any visible floor elements: Preserve completely
+   - DO NOT simplify, blur, or remove ANY interior components or details
+3. Windows and Windshield Treatment - NATURAL STUDIO LIGHTING:
+   - Replace exterior view through windows with SOFT DIFFUSED WHITE LIGHT
+   - Create the effect of bright studio softbox lighting coming through windows
+   - Windows should show gentle gradient: brighter at center, slightly darker at edges
+   - Maintain window frame, rubber seals, and all window details
+   - Effect should look like natural daylight through frosted studio windows
+   - DO NOT create solid flat white blocks - use subtle gradients for realism
+4. SCREENS/DISPLAYS - ABSOLUTE PRESERVATION:
+   - Keep digital screens EXACTLY as photographed - zero modifications
+   - Backup camera screens: preserve entire display intact
+   - Navigation displays: maintain as-is with all graphics/maps
+   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, text, warning lights
+   - Infotainment screens: keep intact, do NOT split, blur, or alter
+   - Climate control displays: keep all numbers and symbols
+   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on ANY screens
+   - DO NOT hallucinate or generate new screen content
+   - If screen shows text/symbols in original, keep them EXACTLY as they appear
+5. Lighting Enhancement - MAINTAIN DEPTH AND DETAIL:
+   - Brighten cabin with soft, even, professional showroom lighting
+   - Preserve all shadows that define shapes and depth (seat contours, dashboard depth)
+   - Remove only harsh, unflattering shadows (like dark spots from overhead lighting)
+   - Ensure lighting reveals texture and detail rather than washing it out
+   - Maintain natural contrast between different materials (leather vs plastic vs metal)
+6. Material Authenticity:
+   - Leather should show natural grain and subtle creasing
+   - Plastic should maintain its sheen and molded details
+   - Metal/chrome should keep reflective properties
+   - Fabric should show weave texture
+7. Remove any photographer reflections from interior chrome/screens/glass
+8. VERIFY BEFORE OUTPUT:
+   - ALL original interior components are present and detailed
+   - No elements have been simplified, removed, or blurred
+   - Window treatment looks natural, not artificial flat white
+   - All screens and displays are perfectly preserved
+   - Material textures are maintained or enhanced, never degraded
 
 **FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle, controls):**
 1. This is product photography - NOT a full vehicle shot
