@@ -9,8 +9,9 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { RetryIcon } from './icons/RetryIcon';
 import { ErrorIcon } from './icons/ErrorIcon';
 import { WandIcon } from './icons/WandIcon';
-import { ArrowLeftRightIcon } from './icons/ArrowLeftRightIcon';
 import { Spin360Viewer } from './spin360/Spin360Viewer';
+import { ArrowLeftRightIcon } from './icons/ArrowLeftRightIcon';
+import { CameraIcon } from './icons/CameraIcon';
 
 
 interface ImageViewerProps {
@@ -20,6 +21,7 @@ interface ImageViewerProps {
   onNavigate: (index: number) => void;
   onRecreateBackground: (id: string) => void;
   onRetouch: (id: string, prompt: string) => void;
+  onHeroRender: (id: string, prompt?: string) => void;
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({
@@ -29,6 +31,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   onNavigate,
   onRecreateBackground,
   onRetouch,
+  onHeroRender,
 }) => {
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [isOriginalLoaded, setIsOriginalLoaded] = useState(false);
@@ -36,22 +39,25 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const [sliderPosition, setSliderPosition] = useState(50);
   const [retouchPrompt, setRetouchPrompt] = useState('');
   const [isRetouching, setIsRetouching] = useState(false);
+  const [heroPrompt, setHeroPrompt] = useState('');
+  const [isHeroRendering, setIsHeroRendering] = useState(false);
 
   const image = images[currentIndex];
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   // Detect if current image is part of a 360 spin set
   const spin360Set = useMemo<Spin360Set | null>(() => {
-    if (!image.spin360Id) return null;
-    
+    const currentImage = images[currentIndex];
+    if (!currentImage?.spin360Id) return null;
+
     const spin360Images = images
-      .filter(img => img.spin360Id === image.spin360Id)
+      .filter(img => img.spin360Id === currentImage.spin360Id)
       .sort((a, b) => (a.spin360Index ?? 0) - (b.spin360Index ?? 0));
-    
+
     if (spin360Images.length < 2) return null;
-    
+
     return {
-      id: image.spin360Id,
+      id: currentImage.spin360Id,
       name: `360° Spin`,
       vehicleType: 'sedan', // Default, would need to be stored if important
       timestamp: Date.now(),
@@ -59,7 +65,36 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
       totalAngles: 24, // Standard 360 spin has 24 angles
       isComplete: spin360Images.length === 24,
     };
-  }, [image, images]);
+  }, [currentIndex, images]);
+
+  useEffect(() => {
+    const currentImage = images[currentIndex];
+    if (!currentImage) return;
+    // Reset state when the image changes
+    setIsOriginalLoaded(false);
+    setIsProcessedLoaded(false);
+    setSliderPosition(50);
+    setRetouchPrompt('');
+    setIsRetouching(false);
+    setHeroPrompt(currentImage.heroPrompt ?? '');
+    setIsHeroRendering(false);
+  }, [currentIndex, images]);
+
+  useEffect(() => {
+    const currentImage = images[currentIndex];
+    if (!currentImage) return;
+    setIsRetouching(currentImage.status === 'retouching');
+  }, [currentIndex, images]);
+
+  useEffect(() => {
+    const currentImage = images[currentIndex];
+    if (!currentImage) return;
+    if (currentImage.status === 'processing' && currentImage.qualityMode === 'hero') {
+      setIsHeroRendering(true);
+    } else if (currentImage.status !== 'processing') {
+      setIsHeroRendering(false);
+    }
+  }, [currentIndex, images]);
 
   // Guard: if no valid image, don't render
   if (!image) {
@@ -78,43 +113,35 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     );
   }
 
-  useEffect(() => {
-    // Reset state when the image changes
-    setIsOriginalLoaded(false);
-    setIsProcessedLoaded(false);
-    setSliderPosition(50);
-    setRetouchPrompt('');
-    setIsRetouching(false);
-  }, [currentIndex]);
-
-  useEffect(() => {
-    if (image.status === 'retouching') {
-        setIsRetouching(true);
-    } else {
-        setIsRetouching(false);
-    }
-  }, [image.status]);
-
   const handleClose = () => {
     setIsAnimatingOut(true);
     setTimeout(onClose, 200); // Match animation duration
   };
-  
+
   const handleRecreateBackground = () => {
     onRecreateBackground(image.id);
     handleClose();
   };
-  
+
   const handleMagicRetouch = () => {
-      const magicPrompt = "Analyze this photo of a car and perform professional-level enhancements. Improve lighting, correct colors, enhance reflections on the paint and glass to make it look like a high-end commercial photograph. Do not change the car's color or add/remove any parts. Make the car look its absolute best.";
-      setIsRetouching(true);
-      onRetouch(image.id, magicPrompt);
+    if (!isCompleted || isBusy) return;
+    const magicPrompt = "Polish this OEM vehicle photo for a premium studio deliverable. Even out the lighting with soft daylight diffusion around 5500K, lift shadows just enough to reveal real material texture, and refine paint/glass reflections without inventing new highlights. Keep exterior/interior colors accurate, preserve all badges, screens, warning lights, and background surfaces exactly as captured, and avoid adding or removing any components.";
+    setIsRetouching(true);
+    onRetouch(image.id, magicPrompt);
   };
-  
+
   const handleCustomRetouch = () => {
-      if (!retouchPrompt.trim()) return;
-      setIsRetouching(true);
-      onRetouch(image.id, retouchPrompt);
+    const trimmed = retouchPrompt.trim();
+    if (!isCompleted || !trimmed || isBusy) return;
+    setIsRetouching(true);
+    onRetouch(image.id, trimmed);
+  };
+
+  const handleHeroRenderClick = () => {
+    if (!isHeroEligible || isBusy) return;
+    const descriptor = heroPrompt.trim();
+    setIsHeroRendering(true);
+    onHeroRender(image.id, descriptor.length ? descriptor : undefined);
   };
 
   const handleNavigate = (direction: 'prev' | 'next') => {
@@ -126,6 +153,9 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   };
 
   const isImageLoading = (!isOriginalLoaded || (image.processedUrl && !isProcessedLoaded));
+  const isCompleted = image.status === 'completed';
+  const isHeroEligible = image.status === 'completed' || image.status === 'failed';
+  const isBusy = isRetouching || isHeroRendering || image.status === 'processing';
 
 
   return (
@@ -153,7 +183,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
             <XIcon className="w-6 h-6" />
           </button>
         </header>
-        
+
         {/* Image Display */}
         <div ref={imageContainerRef} className="relative w-full flex-1 flex items-center justify-center min-h-0">
             {spin360Set && spin360Set.images.every(img => img.status === 'completed' && img.processedUrl) ? (
@@ -217,18 +247,18 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                     )}
                 </div>
 
-                {(image.status === 'processing' || isRetouching) && (
+                {(image.status === 'processing' || isRetouching || isHeroRendering) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-center">
                     <Spinner className="w-12 h-12 text-blue-400"/>
                     <p className="mt-4 text-lg font-semibold text-white animate-pulse">
-                      {isRetouching ? 'Applying AI Retouch...' : 'Creating Background...'}
+                      {isRetouching ? 'Applying AI Retouch...' : isHeroRendering ? 'Generating Hero Render...' : 'Creating Background...'}
                     </p>
                   </div>
                 )}
               </>
             )}
         </div>
-        
+
         {/* Footer & Controls */}
         <footer className="w-full max-w-4xl flex flex-col items-center gap-4 px-2">
             {image.status === 'failed' && image.error && (
@@ -239,6 +269,72 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                     </div>
                 </div>
             )}
+
+          <div className="w-full bg-gray-800/40 border border-gray-700 rounded-2xl p-4 flex flex-col gap-4">
+            <div className="grid gap-4 w-full md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Retouch Prompt
+                </label>
+                <textarea
+                  value={retouchPrompt}
+                  onChange={(e) => setRetouchPrompt(e.target.value)}
+                  placeholder="Describe refinements for this shot (lighting, materials, cleanups)..."
+                  className="bg-gray-900/60 border border-gray-700 rounded-xl p-3 text-sm text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[110px]"
+                  disabled={isBusy}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Hero Render Descriptor (optional)
+                </label>
+                <textarea
+                  value={heroPrompt}
+                  onChange={(e) => setHeroPrompt(e.target.value)}
+                  placeholder="Optional: dial in the hero plate (angle, camera height, lighting tweaks). Leave blank for auto."
+                  className="bg-gray-900/60 border border-gray-700 rounded-xl p-3 text-sm text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[110px]"
+                  disabled={isBusy}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleMagicRetouch}
+                disabled={!isCompleted || isBusy}
+                className={`flex items-center gap-x-2 px-4 py-2 text-sm font-semibold text-white rounded-full transition-colors ${(!isCompleted || isBusy) ? 'bg-gray-700/50 cursor-not-allowed opacity-60' : 'bg-blue-600 hover:bg-blue-500'}`}
+                aria-label="Apply magic retouch"
+                title="Apply the tuned retouch recipe for studio-perfect polish"
+              >
+                <WandIcon className="w-5 h-5" />
+                <span>Magic Retouch</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCustomRetouch}
+                disabled={!isCompleted || !retouchPrompt.trim() || isBusy}
+                className={`flex items-center gap-x-2 px-4 py-2 text-sm font-semibold text-white rounded-full transition-colors ${(!isCompleted || !retouchPrompt.trim() || isBusy) ? 'bg-gray-700/50 cursor-not-allowed opacity-60' : 'bg-purple-600 hover:bg-purple-500'}`}
+                aria-label="Run custom retouch"
+                title="Send a custom retouch instruction to the Gemini retouch worker"
+              >
+                <span>Apply Custom Retouch</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleHeroRenderClick}
+                disabled={!isHeroEligible || isBusy}
+                className={`flex items-center gap-x-2 px-4 py-2 text-sm font-semibold text-white rounded-full transition-colors ${(!isHeroEligible || isBusy) ? 'bg-gray-700/50 cursor-not-allowed opacity-60' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                aria-label="Generate hero render"
+                title="Generate a high-fidelity Imagen 4 hero render for this plate"
+              >
+                <CameraIcon className="w-5 h-5" />
+                <span>Generate Hero Render</span>
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">
+              Hero renders leverage Imagen 4 Ultra for a single high-fidelity studio output. If no descriptor is provided we auto-describe the vehicle and composition.
+            </p>
+          </div>
 
            <div className="flex items-center justify-center gap-x-4 p-2 bg-gray-800/50 border border-gray-700 rounded-full">
                 {(image.status === 'completed' || image.status === 'failed') && (

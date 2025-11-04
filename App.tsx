@@ -4,7 +4,7 @@ import { useAuth } from './context/AuthProvider';
 import { Login } from './components/Login';
 import { signOut } from './services/auth';
 import { ImageCard } from './components/ImageCard';
-import { processImageBatch, retouchImage, analyzeImageContent } from './services/geminiService';
+import { processImageBatch, retouchImage, analyzeImageContent, type HeroRenderConfig } from './services/geminiService';
 import type { ImageFile, BatchHistoryEntry, DealershipBackground, VehicleType, Spin360Set } from './types';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { ErrorIcon } from './components/icons/ErrorIcon';
@@ -54,6 +54,14 @@ interface JSZipConstructor {
 
 // Declare JSZip for use from the script tag in index.html
 declare var JSZip: JSZipConstructor;
+
+const HERO_RENDER_CONFIG: HeroRenderConfig = {
+  modelVariant: 'ultra',
+  imageSize: '2K',
+  aspectRatio: '4:3',
+  numberOfImages: 1,
+  personGeneration: 'dont_allow',
+};
 
 const getFileExtensionFromMimeType = (mimeType: string): string => {
   switch (mimeType) {
@@ -298,7 +306,8 @@ const App = () => {
            );
          },
          pauseRef,
-         dealershipBackground || undefined
+          dealershipBackground || undefined,
+          { heroConfig: HERO_RENDER_CONFIG }
        );
      } catch (error) {
        logger.error('An unexpected error occurred during batch processing:', error);
@@ -369,7 +378,9 @@ const App = () => {
       ...imageToReprocess,
       status: 'pending',
       processedUrl: null,
-      error: null
+      error: null,
+      qualityMode: 'standard',
+      heroModel: undefined,
     };
 
     // Clean up old processed blob URL
@@ -399,7 +410,8 @@ const App = () => {
            );
         },
         pauseRef,
-        dealershipBackground || undefined
+        dealershipBackground || undefined,
+        { heroConfig: HERO_RENDER_CONFIG }
       );
     } catch (error) {
       logger.error(`An unexpected error occurred during re-processing image ${imageId}:`, error);
@@ -447,6 +459,33 @@ const App = () => {
       logger.error(`An unexpected error occurred during retouching image ${imageId}:`, error);
     }
   }, [images, updateAndPersistImages, currentImageIndex]);
+
+  const handleHeroRender = useCallback(async (imageId: string, prompt?: string) => {
+    const imageToPromote = images.find(img => img.id === imageId);
+    if (!imageToPromote) return;
+
+    const trimmedPrompt = prompt?.trim();
+
+    const heroCandidate: ImageFile = {
+      ...imageToPromote,
+      status: 'pending',
+      processedUrl: null,
+      error: null,
+      qualityMode: 'hero',
+      heroPrompt: trimmedPrompt?.length ? trimmedPrompt : imageToPromote.heroPrompt,
+      heroModel: undefined,
+    };
+
+    if (imageToPromote.processedUrl) {
+      URL.revokeObjectURL(imageToPromote.processedUrl);
+    }
+
+    updateAndPersistImages(prevImages =>
+      prevImages.map(img => (img.id === imageId ? heroCandidate : img))
+    );
+
+    await startProcessing([heroCandidate]);
+  }, [images, updateAndPersistImages, startProcessing]);
 
   const handleBackgroundSelected = useCallback(async (file: File) => {
     const newBackground: DealershipBackground = {
@@ -1024,6 +1063,7 @@ const App = () => {
           onNavigate={setCurrentImageIndex}
           onRecreateBackground={handleReprocessImage}
           onRetouch={handleRetouchImage}
+          onHeroRender={handleHeroRender}
         />
       )}
       {isAdminOpen && <AdminPanel onClose={() => setIsAdminOpen(false)} />}

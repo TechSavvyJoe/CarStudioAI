@@ -84,6 +84,211 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
   return URL.createObjectURL(blob);
 };
 
+const sanitizeHeroDescriptor = (descriptor: string): string =>
+  descriptor
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildHeroFilename = (descriptor: string): string => {
+  const cleaned = sanitizeHeroDescriptor(descriptor)
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('-')
+    .substring(0, 50);
+
+  return cleaned.length > 0 ? cleaned : 'Hero-Render';
+};
+
+const createDefaultHeroPrompt = (descriptor: string): string => {
+  const refinedDescriptor = sanitizeHeroDescriptor(descriptor);
+  return `Create a photorealistic automotive hero render of ${refinedDescriptor} in a premium studio environment.
+
+REQUIREMENTS:
+- Maintain exact manufacturer design language, trim cues, wheel design, and proportions described.
+- Lighting: high-key automotive studio, soft diffused key light with controlled specular highlights.
+- Background: seamless neutral gradient cyclorama, no props, no text, no additional vehicles.
+- Surface treatment: crisp reflections, accurate paint color, visible material textures.
+- Output resolution equivalent to ≥4K, sharp focus edge to edge.
+- Camera angle and composition must respect the described perspective.
+- Do not invent aftermarket modifications, decals, or wheel designs.`;
+};
+
+const describeVehicleForHero = async (
+  carImagePart: GenerativeContentPart,
+  fallback?: string
+): Promise<string> => {
+  const descriptorPrompt = `You are an automotive catalog specialist. Describe the exact vehicle in this photo in one clause (max 25 words).
+- Include paint color, body style, trim or standout details, wheel finish, and camera perspective.
+- Do NOT mention the background, lighting equipment, people, or photography instructions.
+- Respond with a single sentence fragment only.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [carImagePart, { text: descriptorPrompt }] },
+      config: {
+        responseModalities: [Modality.TEXT],
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 128,
+      },
+    });
+
+    const textPart = response.candidates?.[0]?.content?.parts?.find(
+      part => 'text' in part
+    ) as { text?: string } | undefined;
+
+    const descriptor = textPart?.text?.trim();
+    if (descriptor) {
+      return sanitizeHeroDescriptor(descriptor);
+    }
+  } catch (error) {
+    console.warn('Hero descriptor generation failed, falling back to default.', error);
+  }
+
+  return fallback ? sanitizeHeroDescriptor(fallback) : 'the vehicle';
+};
+
+const renderHeroImageWithImagen = async (
+  imageFile: ImageFile,
+  onUpdate: (updatedImage: ImageFile) => void,
+  config: HeroRenderConfig
+): Promise<void> => {
+  const modelsWithImagen = ai.models as unknown as {
+    generateImages?: (params: {
+      model: string;
+      prompt: string;
+      config?: {
+        numberOfImages?: number;
+        aspectRatio?: string;
+        imageSize?: string;
+        personGeneration?: PersonGenerationPolicy;
+      };
+    }) => Promise<
+      | {
+          generatedImages?: Array<{
+            image?: { imageBytes?: string; mimeType?: string };
+            mimeType?: string;
+          }>;
+        }
+      | undefined
+    >;
+  };
+
+  if (typeof modelsWithImagen.generateImages !== 'function') {
+    throw new Error('Imagen 4 generation is not available in the current SDK build. Update @google/genai to a version that exposes models.generateImages.');
+  }
+
+  onUpdate({ ...imageFile, status: 'processing', error: 'Generating hero render via Imagen 4…' });
+
+  const carPart = await fileToGenerativePart(imageFile.originalFile);
+  const descriptor = await describeVehicleForHero(carPart, imageFile.aiGeneratedName);
+  const defaultPrompt = createDefaultHeroPrompt(descriptor);
+
+  const finalPrompt = imageFile.heroPrompt?.trim().length
+    ? `${imageFile.heroPrompt.trim()}
+
+HERO RENDER CONSTRAINTS:
+- Preserve the factory design and proportions of ${descriptor}.
+- Produce a photorealistic high-end studio environment.`
+    : config.promptOverride
+        ? config.promptOverride({
+            descriptor,
+            aiGeneratedName: imageFile.aiGeneratedName,
+            defaultPrompt,
+            imageFile,
+          })
+        : defaultPrompt;
+
+  const modelVariant: HeroModelVariant = config.modelVariant ?? 'ultra';
+  const modelId = HERO_MODEL_MAP[modelVariant];
+
+  const response = await modelsWithImagen.generateImages({
+    model: modelId,
+    prompt: finalPrompt,
+    config: {
+      numberOfImages: config.numberOfImages ?? 1,
+      aspectRatio: config.aspectRatio ?? '4:3',
+      imageSize: config.imageSize ?? '1K',
+      personGeneration: config.personGeneration ?? 'dont_allow',
+    },
+  });
+
+  const generatedImage = response?.generatedImages?.[0];
+  const imageBytes = generatedImage?.image?.imageBytes;
+  if (!imageBytes) {
+    throw new Error('Imagen 4 returned no image data.');
+  }
+
+  const mimeType = generatedImage?.image?.mimeType || generatedImage?.mimeType || 'image/png';
+  const newProcessedUrl = base64ToBlobUrl(imageBytes, mimeType);
+
+  if (imageFile.processedUrl && imageFile.processedUrl.startsWith('blob:')) {
+    URL.revokeObjectURL(imageFile.processedUrl);
+  }
+
+  const updatedName = imageFile.aiGeneratedName ?? buildHeroFilename(descriptor);
+
+  onUpdate({
+    ...imageFile,
+    status: 'completed',
+    processedUrl: newProcessedUrl,
+    aiGeneratedName: updatedName,
+    heroModel: modelId,
+    error: null,
+  });
+};
+
+type HeroModelVariant = 'standard' | 'ultra' | 'fast';
+
+const HERO_MODEL_MAP: Record<HeroModelVariant, string> = {
+  standard: 'imagen-4.0-generate-001',
+  ultra: 'imagen-4.0-ultra-generate-001',
+  fast: 'imagen-4.0-fast-generate-001',
+};
+
+type ImagenAspectRatio =
+  | '1:1'
+  | '3:4'
+  | '4:3'
+  | '9:16'
+  | '16:9'
+  | '2:3'
+  | '3:2'
+  | '4:5'
+  | '5:4'
+  | '21:9';
+
+type ImagenSize = '1K' | '2K';
+
+type PersonGenerationPolicy = 'dont_allow' | 'allow_adult' | 'allow_all';
+
+interface HeroPromptContext {
+  descriptor: string;
+  aiGeneratedName?: string;
+  defaultPrompt: string;
+  imageFile: ImageFile;
+}
+
+export interface HeroRenderConfig {
+  modelVariant?: HeroModelVariant;
+  aspectRatio?: ImagenAspectRatio;
+  imageSize?: ImagenSize;
+  numberOfImages?: 1 | 2 | 3 | 4;
+  personGeneration?: PersonGenerationPolicy;
+  promptOverride?: (context: HeroPromptContext) => string;
+}
+
+interface BatchProcessingOptions {
+  heroConfig?: HeroRenderConfig;
+}
+
 /**
  * Analyzes an image to generate a descriptive filename based on the vehicle part/angle shown
  * @param file - The image file to analyze
@@ -132,9 +337,15 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
     );
 
     const apiPromise = ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [imagePart, { text: prompt }],
+      },
+      config: {
+        responseModalities: [Modality.TEXT],
+        temperature: 0.15,
+        topP: 0.8,
+        maxOutputTokens: 64,
       },
     });
 
@@ -190,312 +401,89 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
 
 // --- START: New consistent prompt generation logic ---
 
+const GLOBAL_INTENT = `You are a senior automotive imaging specialist. Your role is to transform supplied vehicle photos into polished, photorealistic deliverables ready for OEM and dealership merchandising. Treat every decision like a high-end commercial retouch: no stylistic inventions, no AI hallucinations, just faithful improvements.`;
+
+const SHOT_CLASSIFICATION = `INTERNAL CLASSIFICATION (do not mention in output): Determine \`shot_type\` strictly from the source photo.
+- EXTERIOR — the full vehicle or large exterior portion is visible.
+- INTERIOR — cabin, dashboard, seating, instrumentation, or door panels dominate.
+- DETAIL — close-up of a specific component (wheel, light, badge, engine bay, shifter, etc.).
+Follow the workflow that matches the determined \`shot_type\` and ignore instructions for the others.`;
+
+const COMPOSITION_FIDELITY = `COMPOSITION FIDELITY (applies to every shot):
+1. Output width, height, crop, and aspect ratio must match the original pixels exactly.
+2. Subject scale and placement must remain 1:1 with the source frame—no zooming, stretching, or reframing.
+3. Camera perspective, lens feel, and focal characteristics stay untouched.
+4. Preserve every visible edge of the subject exactly where it occurs in the frame.
+5. Maintain color accuracy to the real paint, materials, upholstery, and displays.`;
+
+const IMAGE_QUALITY = `IMAGE QUALITY & LIGHTING:
+- Maintain or exceed native sharpness. Never blur, denoise aggressively, or introduce plastic smoothing.
+- Enhance clarity with subtle micro-contrast where it helps reveal real texture (paint flake, leather grain, machined metal, stitching).
+- Keep lighting believable: respect the incoming light direction, temperature, and contrast. When brightening, use soft studio-style diffusion near 5200–5600K unless the source indicates otherwise.
+- Never introduce dramatic effects, flares, colored gels, or stylized grading.`;
+
+const REFLECTION_POLICY = `REFLECTION & ARTIFACT CLEANUP:
+- Inspect every reflective surface (paint, chrome, glass, screens, wheel faces) for the photographer, rigging, or stray human silhouettes.
+- Remove those reflections and replace them with clean environmental cues (sky gradients, dealership architecture, soft studio cards) that match the scene.
+- Never invent people, props, or new objects. Leave OEM badges, decals, VIN stickers, and legally required markings untouched.`;
+
+const DEALERSHIP_EXTERIOR = `DEALERSHIP BACKGROUND WORKFLOW (only when \`shot_type = EXTERIOR\` and a dealership background image is provided as the second input):
+1. Use the supplied dealership background exclusively—do not fabricate new scenery.
+2. Analyze the background for sun position, color temperature, horizon height, and surface texture before compositing.
+3. Remove the original ground plane completely. Replace it with the dealership surface so there is zero trace of the prior pavement or floor.
+4. Align the vehicle on the new surface with perfect perspective matching and tire contact. Inject realistic soft shadows matching the dealership light direction and intensity.
+5. Harmonize reflections and color so the car feels naturally photographed on-location.
+6. Ensure compositing seams are invisible—no halos, cut lines, or mismatched exposure.
+7. Confirm the vehicle remains the same size and crop as the source frame.`;
+
+const STUDIO_EXTERIOR = `PURE WHITE STUDIO WORKFLOW (only when \`shot_type = EXTERIOR\` and no dealership background is supplied):
+1. Extract the vehicle cleanly and place it on a seamless white cyclorama (#FFFFFF) with a gentle studio roll.
+2. Remove every trace of the original ground. Produce a realistic soft contact shadow (20–30% opacity) directly beneath the tires aligned with the existing light direction.
+3. Maintain paint color accuracy and keep specular highlights crisp and showroom-ready.
+4. Ensure the white background stays neutral—no gradients unless the source implies them.
+5. Vehicle scale, framing, and perspective stay identical to the input capture.`;
+
+const INTERIOR_GUIDE = `INTERIOR / CABIN WORKFLOW (only when \`shot_type = INTERIOR\`):
+- Ignore any supplied dealership background asset; use the original cabin as-is.
+- Preserve every component exactly as captured: seat bolsters, stitching, perforations, door cards, speaker grilles, HVAC controls, ambient lighting strips, and seams.
+- Windows should glow with soft diffused studio light—not flat white slabs. Use gentle gradients that feel like 8–12 foot softboxes outside the vehicle.
+- Screens, gauge clusters, HUD projections, and infotainment displays must remain pixel-perfect. Do not replace UI, remove warning lights, or invent graphics.
+- Brighten the cabin evenly while retaining the shadows that define depth (seat bolsters, console recesses, steering wheel contours). Avoid flattening the scene.
+- Remove harsh spot reflections on glossy trim only if they distract; never strip true material character.`;
+
+const DETAIL_GUIDE = `DETAIL / COMPONENT WORKFLOW (only when \`shot_type = DETAIL\`):
+- Ignore any supplied dealership background asset; detail shots always use a studio rendering.
+- Treat it like product photography. Keep the component size and placement identical to the source frame.
+- Background should become a premium studio gradient: light-to-medium gray for mechanical subjects (#D8D8D8 to #8A8A8A) or a soft gray bokeh for design accents.
+- ENGINE BAY RULE: Never replace the real engine. Keep every hose, cover, bracket, and fluid reservoir exactly as photographed. Only improve the surrounding environment.
+- Accentuate real textures—machined metal, knurled knobs, tire tread, lens optics—without inventing new geometry.
+- Remove distracting reflections but retain realistic metallic sheen and specular cues.`;
+
+const QA_CHECKLIST = `FINAL QA BEFORE DELIVERY:
+- Sharpness is equal to or better than the source with no AI softness.
+- Output dimensions, crop, and subject scale are identical to the input file.
+- Background choice matches the classified shot type (dealership, pure white, or gray gradient).
+- No unwanted artifacts, halos, or mismatched color grading.
+- All legal/safety information, VIN stickers, and OEM badges remain untouched.
+- ZERO traces of photographer, crew, or equipment reflections.`;
+
+const OUTPUT_SUMMARY = `OUTPUT TARGET: Deliver a photorealistic, production-ready automotive image that feels genuinely photographed under the specified conditions.`;
+
 const generateConsistentPrompt = (dealershipBackground?: DealershipBackground): string => {
-  if (dealershipBackground) {
-    // When dealership background is provided, use it ONLY for exterior shots
-    const prompt = `You are a professional automotive photo compositor specialized in seamless background replacement.
+  const sections = [
+   GLOBAL_INTENT,
+   SHOT_CLASSIFICATION,
+   COMPOSITION_FIDELITY,
+   IMAGE_QUALITY,
+   REFLECTION_POLICY,
+   dealershipBackground ? DEALERSHIP_EXTERIOR : STUDIO_EXTERIOR,
+   INTERIOR_GUIDE,
+   DETAIL_GUIDE,
+   QA_CHECKLIST,
+   OUTPUT_SUMMARY,
+  ];
 
-**CRITICAL IMAGE QUALITY REQUIREMENTS:**
-- Output MUST maintain or EXCEED input image sharpness and quality
-- Do NOT blur, soften, or degrade image quality in any way
-- Preserve fine details: paint texture, reflections, edges, text
-- If upscaling is needed, use high-quality interpolation
-
-**ABSOLUTE FRAMING LOCK - NON-NEGOTIABLE:**
-1. Vehicle size in output = Vehicle size in input (EXACT 1:1 scale)
-2. Vehicle position in frame = Original position (pixel-perfect)
-3. Output dimensions = Input dimensions (no resize)
-4. Space around vehicle = Original space (identical margins)
-5. Camera perspective = Original perspective (no angle change)
-6. Visible vehicle parts = Original visible parts (no more, no less)
-
-**SEAMLESS COMPOSITING TECHNIQUE:**
-1. Extract vehicle with precision edge detection - include ALL reflections and shadows
-2. Match perspective grid between vehicle and dealership background
-3. Analyze dealership background lighting (sun position, intensity, color temperature)
-4. Place vehicle on background with perfect ground plane alignment
-5. Generate matching shadows (direction, length, softness, opacity based on background lighting)
-6. Color grade vehicle to match background lighting conditions
-7. Blend edges with micro-feathering for imperceptible seams
-8. Add environmental reflections on vehicle from dealership (windows, sky, building)
-9. RESULT: Photo-realistic composite that looks natively photographed at location
-
-**REFLECTION REMOVAL - ABSOLUTELY MANDATORY:**
-- SCAN EVERY reflective surface on vehicle for photographer/person reflections
-- Remove ALL visible reflections of photographer/person/equipment from:
-  * Vehicle paint - ALL body panels (hood, doors, fenders, bumpers, trunk, roof)
-  * Chrome trim, badges, emblems, door handles, mirror housings
-  * Glass surfaces (windows, windshield, headlights, taillights, side mirrors)
-  * Wheels, hubcaps, and any reflective wheel surfaces
-  * ANY shiny or reflective surface on the vehicle
-- Common reflection locations to CHECK:
-  * Door panels (especially passenger doors - most common)
-  * Curved surfaces near photographer
-  * Chrome bumpers and trim pieces
-  * Side mirrors (exterior) - high reflection probability
-  * Dark paint colors show reflections more clearly
-- Replace photographer reflections with appropriate environmental reflections:
-  * Sky gradients (blue/white for outdoors, neutral for studio)
-  * Soft light gradients matching the scene
-  * Generic environmental reflections (trees, clouds, buildings - NOT people)
-- CRITICAL: Absolutely ZERO human figures, cameras, phones, or photographer visible anywhere
-- VERIFY before output: Check EVERY reflective surface for human presence
-
-**FOR EXTERIOR VEHICLE SHOTS (front, side, rear, 3/4 angles):**
-1. Classify as exterior shot - use dealership background
-2. Extract vehicle cleanly (include vehicle shadow from original)
-3. CRITICAL GROUND PLANE REPLACEMENT:
-   - Remove ALL original ground surface (pavement, concrete, asphalt, dirt)
-   - Replace COMPLETELY with dealership surface - no original floor should remain visible
-   - Ensure seamless transition between dealership surface and vehicle tires/bottom
-   - Ground surface must be 100% dealership background, 0% original floor
-4. Place vehicle on dealership surface at EXACT original size and position
-5. Generate new shadow matching dealership sun angle and ambient occlusion
-6. Match vehicle lighting to dealership: adjust highlights, shadows, color cast
-7. Add subtle environmental reflections from dealership (building, sky) on vehicle paint
-8. Seamlessly blend - NO visible edges, halos, or color mismatches
-9. VERIFY: Vehicle looks like it was originally photographed at this dealership
-10. VERIFY: NO original pavement/floor visible - 100% dealership ground surface
-11. MAINTAIN: Exact framing - same vehicle size, position, and composition
-
-**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, controls, screens, door panels):**
-1. IGNORE dealership background completely - NOT applicable
-2. Keep EVERY interior element at EXACT same size, angle, position, and detail level
-3. CRITICAL - PRESERVE ALL INTERIOR DETAILS:
-   - Door panels: Keep ALL textures, stitching, wood/metal trim, speaker grilles
-   - Window controls: Preserve ALL buttons, switches, and control panels on doors
-   - Armrests, cup holders, storage compartments: Keep intact with all details
-   - Seat materials: Maintain fabric/leather texture, stitching patterns, piping
-   - Dashboard trim: Preserve wood grain, carbon fiber, metal accents exactly
-   - Air vents, door handles, lock buttons: Keep ALL small details visible
-   - Floor mats, pedals, and any visible floor elements: Preserve completely
-   - DO NOT simplify, blur, or remove ANY interior components or details
-4. Windows and Windshield Treatment - NATURAL STUDIO LIGHTING:
-   - Replace exterior view through windows with SOFT DIFFUSED WHITE LIGHT
-   - Create the effect of bright studio softbox lighting coming through windows
-   - Windows should show gentle gradient: brighter at center, slightly darker at edges
-   - Maintain window frame, rubber seals, and all window details
-   - Effect should look like natural daylight through frosted studio windows
-   - DO NOT create solid flat white blocks - use subtle gradients for realism
-5. SCREENS/DISPLAYS - ABSOLUTE PRESERVATION:
-   - Keep digital screens EXACTLY as photographed - zero modifications
-   - Backup camera screens: preserve entire display intact
-   - Navigation displays: maintain as-is with all graphics/maps
-   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, text, warning lights
-   - Infotainment screens: keep intact, do NOT split, blur, or alter
-   - Climate control displays: keep all numbers and symbols
-   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on ANY screens
-   - DO NOT hallucinate or generate new screen content
-   - If screen shows text/symbols in original, keep them EXACTLY as they appear
-6. Lighting Enhancement - MAINTAIN DEPTH AND DETAIL:
-   - Brighten cabin with soft, even, professional showroom lighting
-   - Preserve all shadows that define shapes and depth (seat contours, dashboard depth)
-   - Remove only harsh, unflattering shadows (like dark spots from overhead lighting)
-   - Ensure lighting reveals texture and detail rather than washing it out
-   - Maintain natural contrast between different materials (leather vs plastic vs metal)
-7. Material Authenticity:
-   - Leather should show natural grain and subtle creasing
-   - Plastic should maintain its sheen and molded details
-   - Metal/chrome should keep reflective properties
-   - Fabric should show weave texture
-8. VERIFY BEFORE OUTPUT:
-   - ALL original interior components are present and detailed
-   - No elements have been simplified, removed, or blurred
-   - Window treatment looks natural, not artificial flat white
-   - All screens and displays are perfectly preserved
-   - Material textures are maintained or enhanced, never degraded
-
-**FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle):**
-1. NOT an exterior vehicle shot - DO NOT use dealership background
-2. This is product photography - use professional studio backdrop
-3. CRITICAL - ENGINE BAY SHOTS MUST PRESERVE ACTUAL ENGINE:
-   - If input shows ENGINE BAY (open hood with engine visible), you MUST keep the ACTUAL photographed engine
-   - DO NOT replace the real engine with a 3D rendered/generated engine image
-   - DO NOT create a floating standalone engine render
-   - DO NOT hallucinate or generate engine components not in the original photo
-   - Keep EVERY component visible in the original engine bay photo (belts, hoses, covers, fluids, etc.)
-   - The engine must remain under the hood as photographed, not extracted or replaced
-   - Only change the BACKGROUND behind/around the engine bay, never the engine itself
-   - Think: "I'm only improving the background, the engine stays exactly as photographed"
-4. Replace background ONLY (behind the component) with soft neutral gradient:
-   - For mechanical details (engine bay): Light gray (#D5D5D5) to medium gray (#888888)
-   - For design details (wheels, lights, badges, grilles): Soft bokeh effect with gray tones
-5. Keep detail at EXACT original size and framing - no zoom, no recomposition
-6. Professional studio lighting: clean, shadowless, brings out texture
-7. Remove any photographer reflections from chrome, glass, painted surfaces
-8. Enhance sharpness and clarity of the ACTUAL component in the photo
-9. VERIFY: Output shows the SAME component from input, just with better background
-10. VERIFY ENGINE BAY: If input had engine bay, output must show same engine bay with only background improved
-11. CRITICAL: Detail shots get gray studio background, NOT dealership background
-
-**QUALITY ASSURANCE CHECKLIST - VERIFY BEFORE OUTPUT:**
-☐ Image sharpness equal to or better than input (NO blur or quality loss)
-☐ Output dimensions match input dimensions exactly (width × height)
-☐ Vehicle/subject size in frame identical to original
-☐ Same margins and space around subject as original
-☐ No unwanted cropping or expansion of frame boundaries
-☐ Camera angle and perspective unchanged from original
-☐ Background appropriate: dealership for exteriors, white for interiors, gray for details
-☐ Zero visible human/photographer reflections in vehicle surfaces
-☐ Compositing seamless with no visible edges, halos, or mismatched lighting
-☐ All digital screens and displays preserved intact (no splitting or artifacts)
-
-Output: Photo-realistic automotive image that looks professionally shot at the dealership with perfect composition fidelity.`;
-    return prompt.trim();
-  }
-
-  const prompt = `You are a professional automotive studio photographer. Transform car photos into flawless studio-quality images.
-
-**CRITICAL IMAGE QUALITY REQUIREMENTS:**
-- Output MUST maintain or EXCEED input image sharpness and quality
-- Do NOT blur, soften, or degrade image quality in any way
-- Preserve fine details: paint texture, reflections, edges, badges, text
-- If processing requires upscaling, use high-quality interpolation
-- Final image should be crisp, sharp, and professional
-
-**ABSOLUTE FRAMING LOCK - NON-NEGOTIABLE:**
-1. Subject size in output = Subject size in input (EXACT 1:1 scale)
-2. Subject position in frame = Original position (pixel-perfect placement)
-3. Output dimensions = Input dimensions (no dimension changes)
-4. Space around subject = Original space (identical on all sides)
-5. Camera perspective = Original perspective (no angle/height changes)
-6. Visible subject parts = Original visible parts (preserve any edge cut-offs)
-
-**STUDIO BACKGROUND TECHNIQUE:**
-1. Identify subject and extract with precision edge detection
-2. Separate subject from original background cleanly
-3. Place subject on pure white studio background (#FFFFFF)
-4. Generate soft, realistic drop shadow under vehicle (subtle contact shadow)
-5. Apply professional studio lighting: bright, even, shadowless illumination
-6. Ensure subject appears naturally lit as if in white infinity cove studio
-7. Seamlessly blend with micro-feathering - no visible edges or halos
-
-**REFLECTION REMOVAL - ABSOLUTELY MANDATORY:**
-- SCAN EVERY reflective surface on vehicle for photographer/person reflections
-- Remove ALL visible reflections of photographer/person/equipment from:
-  * Vehicle paint - ALL body panels (hood, doors, fenders, bumpers, trunk, roof)
-  * Chrome trim, badges, emblems, door handles, mirror housings
-  * Glass surfaces (windows, windshield, headlights, taillights, side mirrors)
-  * Wheel surfaces, hubcaps, brake rotors - any shiny wheel components
-  * ANY reflective or semi-reflective surface on the vehicle
-- Common reflection locations to CHECK thoroughly:
-  * Door panels (especially passenger doors - MOST COMMON reflection spot)
-  * Curved body panels near camera position
-  * Chrome bumpers and trim pieces
-  * Side mirrors (exterior) - extremely high reflection probability
-  * Dark paint colors (black, navy, burgundy) show reflections most clearly
-  * Glossy wheel finishes
-- Replace photographer reflections with clean environmental reflections:
-  * Sky gradients (blue/white for outdoors, neutral gray for studio)
-  * Soft light gradients that match the lighting environment
-  * Generic environmental reflections (clouds, trees, buildings - NEVER people/equipment)
-- CRITICAL: Absolutely ZERO human figures, cameras, phones, hands, or photographer visible
-- VERIFY before output: Systematically check EVERY reflective surface for any human presence
-- If uncertain, err on side of caution and replace suspicious reflections with clean gradient
-
-**FOR EXTERIOR VEHICLE SHOTS (full vehicle - front, side, rear, 3/4 views):**
-1. Extract vehicle cleanly with all details preserved
-2. CRITICAL GROUND PLANE REMOVAL:
-   - Remove ALL original ground surface (pavement, concrete, asphalt, dirt, grass)
-   - Floor beneath and around vehicle must be PURE WHITE (#FFFFFF)
-   - No traces of original pavement, parking lot markings, or ground texture
-   - Seamless blend between white background and vehicle tires/bottom
-3. Place on pure white studio background (#FFFFFF)
-4. Vehicle MUST be at EXACT same size relative to frame as original
-5. Maintain EXACT same positioning - if centered, stay centered; if off-center, stay off-center
-6. Generate subtle, soft drop shadow (contact shadow only, 20-30% opacity, highly blurred)
-7. Professional studio lighting: bright, even, brings out vehicle lines and paint
-8. Remove all photographer/person reflections from every reflective surface
-9. Ensure paint looks clean and showroom-quality
-10. VERIFY: NO original ground surface visible - complete white background
-11. CRITICAL: Preserve exact framing - same vehicle size, position, composition as input
-
-**FOR INTERIOR/CABIN SHOTS (dashboard, seats, steering wheel, center console, controls, displays, door panels):**
-1. Keep EVERY interior element at EXACT same size, angle, position, and detail level
-2. CRITICAL - PRESERVE ALL INTERIOR DETAILS:
-   - Door panels: Keep ALL textures, stitching, wood/metal trim, speaker grilles
-   - Window controls: Preserve ALL buttons, switches, and control panels on doors
-   - Armrests, cup holders, storage compartments: Keep intact with all details
-   - Seat materials: Maintain fabric/leather texture, stitching patterns, piping
-   - Dashboard trim: Preserve wood grain, carbon fiber, metal accents exactly
-   - Air vents, door handles, lock buttons: Keep ALL small details visible
-   - Floor mats, pedals, and any visible floor elements: Preserve completely
-   - DO NOT simplify, blur, or remove ANY interior components or details
-3. Windows and Windshield Treatment - NATURAL STUDIO LIGHTING:
-   - Replace exterior view through windows with SOFT DIFFUSED WHITE LIGHT
-   - Create the effect of bright studio softbox lighting coming through windows
-   - Windows should show gentle gradient: brighter at center, slightly darker at edges
-   - Maintain window frame, rubber seals, and all window details
-   - Effect should look like natural daylight through frosted studio windows
-   - DO NOT create solid flat white blocks - use subtle gradients for realism
-4. SCREENS/DISPLAYS - ABSOLUTE PRESERVATION:
-   - Keep digital screens EXACTLY as photographed - zero modifications
-   - Backup camera screens: preserve entire display intact
-   - Navigation displays: maintain as-is with all graphics/maps
-   - Instrument cluster (speedometer/tachometer): preserve ALL gauges, numbers, text, warning lights
-   - Infotainment screens: keep intact, do NOT split, blur, or alter
-   - Climate control displays: keep all numbers and symbols
-   - DO NOT add, remove, or modify any text, numbers, symbols, or graphics on ANY screens
-   - DO NOT hallucinate or generate new screen content
-   - If screen shows text/symbols in original, keep them EXACTLY as they appear
-5. Lighting Enhancement - MAINTAIN DEPTH AND DETAIL:
-   - Brighten cabin with soft, even, professional showroom lighting
-   - Preserve all shadows that define shapes and depth (seat contours, dashboard depth)
-   - Remove only harsh, unflattering shadows (like dark spots from overhead lighting)
-   - Ensure lighting reveals texture and detail rather than washing it out
-   - Maintain natural contrast between different materials (leather vs plastic vs metal)
-6. Material Authenticity:
-   - Leather should show natural grain and subtle creasing
-   - Plastic should maintain its sheen and molded details
-   - Metal/chrome should keep reflective properties
-   - Fabric should show weave texture
-7. Remove any photographer reflections from interior chrome/screens/glass
-8. VERIFY BEFORE OUTPUT:
-   - ALL original interior components are present and detailed
-   - No elements have been simplified, removed, or blurred
-   - Window treatment looks natural, not artificial flat white
-   - All screens and displays are perfectly preserved
-   - Material textures are maintained or enhanced, never degraded
-
-**FOR DETAIL/CLOSE-UP SHOTS (wheel, headlight, taillight, grille, badge, engine bay, door handle, controls):**
-1. This is product photography - NOT a full vehicle shot
-2. Keep detail component at EXACT same size and position in frame - no zoom or reframe
-3. CRITICAL - ENGINE BAY SHOTS MUST PRESERVE ACTUAL ENGINE:
-   - If input shows ENGINE BAY (open hood with engine visible), you MUST keep the ACTUAL photographed engine
-   - DO NOT replace the real engine with a 3D rendered/generated engine image
-   - DO NOT create a floating standalone engine render
-   - DO NOT hallucinate or generate engine components not in the original photo
-   - Keep EVERY component visible in the original engine bay photo
-   - The engine must remain under the hood as photographed, not extracted or replaced
-   - Only change the BACKGROUND behind/around the engine bay, never the engine itself
-   - Think: "I'm only improving the background, the engine stays exactly as photographed"
-4. Replace background ONLY (area behind the component) with professional studio backdrop:
-   - For mechanical details (engine bay): Soft gradient from light gray (#D8D8D8) to medium gray (#909090)
-   - For design details (wheels, lights, badges, grilles): Soft bokeh-style blur with gray tones (#C0C0C0 to #808080)
-   - Create depth-of-field effect with Gaussian blur on background
-5. Professional product photography lighting: clean, focused, shadowless, brings out texture and detail
-6. Remove any photographer/person reflections from chrome, glass, painted surfaces
-7. Enhance sharpness and clarity of the detail - make it look premium and high-end
-8. Keep the detail centered or positioned exactly as in original photo
-9. VERIFY: Output shows ACTUAL component from input, not a generated replacement
-10. VERIFY ENGINE BAY: If input had engine bay, output must show same engine bay with only background improved
-11. CRITICAL: Detail shots get gray gradient studio backdrop for professional product photo look
-
-**QUALITY ASSURANCE CHECKLIST - VERIFY EACH BEFORE OUTPUT:**
-☐ Image sharpness EQUAL TO OR BETTER than input (absolutely no quality loss or blur)
-☐ Output dimensions match input dimensions precisely (width × height unchanged)
-☐ Subject size relative to frame identical to original (no scaling)
-☐ Same amount of empty space around subject on all sides
-☐ No unwanted cropping, expansion, or boundary changes
-☐ Camera angle and perspective completely unchanged from original
-☐ Background is appropriate pure white or gray gradient
-☐ ZERO visible human, photographer, or equipment reflections anywhere
-☐ All digital screens and displays preserved intact and visible (no splitting/artifacts)
-☐ If original had parts cut off at frame edges, those cuts are preserved
-☐ Compositing is seamless with no visible edges, halos, or unnatural transitions
-
-Output: Museum-quality studio automotive photography with perfect composition fidelity and zero defects.`;
-  return prompt.trim();
+  return sections.join('\n\n');
 };
 
 
@@ -517,13 +505,28 @@ export const retouchImage = async (
     const file = new File([blob], imageFile.originalFile.name, { type: blob.type });
 
     const imagePart = await fileToGenerativePart(file);
-    const retouchPrompt = `You are an expert automotive photo editor. The user has provided a photo of a car, which has already been placed in a professional white studio setting. Your task is to ONLY modify the car based on the user's request. DO NOT change, alter, or remove the existing white studio background. The background must remain a pure, seamless white void. User's request: "${prompt}"`;
+  const retouchPrompt = `SYSTEM ROLE: Senior automotive retouch artist delivering OEM-ready imagery.
+
+TASK: Apply the user's adjustment verbatim to the vehicle while keeping every other aspect of the supplied studio photograph identical.
+
+NON-NEGOTIABLES:
+- White infinity background (#FFFFFF) stays untouched—no gradients, patterns, or shadows added or removed beyond what already exists.
+- Maintain original framing, crop, perspective, and subject scale pixel-for-pixel.
+- Preserve material fidelity: paint, glass, chrome, wheels, lighting elements, and any branding or legal markings must remain authentic.
+- Keep native sharpness; no blur, watercolor smoothing, or loss of micro-detail.
+- Screens, badges, VIN stickers, and safety labels must stay exactly as captured.
+
+ADJECTIVE GUIDE: Subtle, photoreal, premium showroom finish.
+
+USER INSTRUCTION: "${prompt}"
+
+OUTPUT STYLE: Updated image only; do not append text or overlays.`;
     const promptPart = { text: retouchPrompt };
 
     const apiResponse = await ai.models.generateContent({
       model,
       contents: { parts: [imagePart, promptPart] },
-      config: { responseModalities: [Modality.IMAGE] },
+      config: { responseModalities: [Modality.IMAGE], temperature: 0.2, topP: 0.8 },
     });
 
     const resultPart = apiResponse.candidates?.[0]?.content?.parts?.[0];
@@ -558,10 +561,12 @@ export const processImageBatch = async (
   imageFiles: ImageFile[],
   onUpdate: (updatedImage: ImageFile) => void,
   pauseRef: { current: boolean },
-  dealershipBackground?: DealershipBackground
+  dealershipBackground?: DealershipBackground,
+  options?: BatchProcessingOptions
 ) => {
   const model = 'gemini-2.5-flash-image';
   const basePrompt = generateConsistentPrompt(dealershipBackground);
+  const heroConfig = options?.heroConfig;
 
   // Set initial status to 'queued' for better UI feedback
   imageFiles.forEach(img => {
@@ -621,6 +626,22 @@ export const processImageBatch = async (
       return;
     }
 
+    const wantsHero = Boolean(heroConfig && imageFile.qualityMode === 'hero');
+    if (wantsHero) {
+      try {
+        await waitForRateLimit();
+        await renderHeroImageWithImagen(imageFile, onUpdate, heroConfig!);
+        return;
+      } catch (heroError) {
+        console.error(`Hero render failed for ${imageFile.originalFile.name}, retrying with standard Gemini pipeline.`, heroError);
+        onUpdate({
+          ...imageFile,
+          status: 'processing',
+          error: 'Hero render failed, retrying with standard pipeline...'
+        });
+      }
+    }
+
     let processed = false;
     let attempt = 0;
     const maxAttempts = 10;
@@ -667,7 +688,11 @@ Formatting rules:
         const response = await ai.models.generateContent({
           model,
           contents: { parts },
-          config: { responseModalities: [Modality.IMAGE, Modality.TEXT] }, // Request BOTH image and text
+          config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+            temperature: 0.25,
+            topP: 0.85,
+          }, // Request BOTH image and text
         });
 
         // Extract both image and AI-generated filename from response
