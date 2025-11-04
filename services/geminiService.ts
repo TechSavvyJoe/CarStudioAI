@@ -2,7 +2,6 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 import type { ImageFile, DealershipBackground } from '../types';
 import { logger } from '../utils/logger';
-import { withRateLimit } from '../utils/rateLimitRetry';
 
 // Use import.meta.env for Vite projects (not process.env)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -72,6 +71,8 @@ const fileToGenerativePart = async (file: File) => {
   };
 };
 
+type GenerativeContentPart = Awaited<ReturnType<typeof fileToGenerativePart>> | { text: string };
+
 const base64ToBlobUrl = (base64: string, mimeType: string): string => {
   const byteCharacters = atob(base64);
   const byteNumbers = new Array(byteCharacters.length);
@@ -91,11 +92,11 @@ const base64ToBlobUrl = (base64: string, mimeType: string): string => {
 export const analyzeImageContent = async (file: File, retryCount = 0): Promise<string> => {
   const startTime = Date.now();
   const maxRetries = 3;
-  
+
   try {
     console.log(`🔍 [${file.name}] Starting analysis... (attempt ${retryCount + 1}/${maxRetries + 1})`);
     validateFile(file);
-    
+
     const imagePart = await fileToGenerativePart(file);
     console.log(`📦 [${file.name}] Image encoded (${Math.round(file.size / 1024)}KB)`);
 
@@ -123,13 +124,13 @@ EXAMPLES:
 RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the descriptive name).`;
 
     console.log(`📤 [${file.name}] Sending to Gemini API...`);
-    
+
     // Add timeout wrapper
     const timeoutMs = 30000; // 30 second timeout per image
-    const timeoutPromise = new Promise<never>((_, reject) => 
+    const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Analysis timeout (30s)')), timeoutMs)
     );
-    
+
     const apiPromise = ai.models.generateContent({
       model: 'gemini-2.0-flash-exp',
       contents: {
@@ -141,10 +142,12 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
     const response = result.candidates?.[0]?.content?.parts?.[0];
-    const text = response && 'text' in response ? response.text.trim() : '';
-    
+    const text = response && 'text' in response && typeof response.text === 'string'
+      ? response.text.trim()
+      : '';
+
     console.log(`📥 [${file.name}] Response received (${elapsedTime}s): "${text}"`);
-    
+
     // Clean up the response - remove any quotes, file extensions, or extra characters
     const cleanName = text
       .replace(/^["']|["']$/g, '') // Remove quotes
@@ -152,33 +155,35 @@ RESPOND WITH ONLY THE FILENAME (no explanation, no file extension, just the desc
       .replace(/[^a-zA-Z0-9-]/g, '-') // Replace invalid chars with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single
       .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-    
+
     console.log(`✅ [${file.name}] AI label: "${cleanName || 'Vehicle-Photo'}" (${elapsedTime}s total)`);
     return cleanName || 'Vehicle-Photo';
-  } catch (error: any) {
+  } catch (error: unknown) {
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
-    
+
+    const message = error instanceof Error ? error.message : String(error);
+
     // Check if it's a rate limit error (429)
-    const isRateLimit = error?.message?.includes('429') || error?.message?.includes('quota');
-    
+    const isRateLimit = /429|quota/i.test(message);
+
     if (isRateLimit && retryCount < maxRetries) {
       // Extract retry delay from error (API tells us how long to wait)
-      const retryMatch = error?.message?.match(/"retryDelay":"(\d+)s"/);
+      const retryMatch = message.match(/"retryDelay":"(\d+)s"/);
       const suggestedDelay = retryMatch ? parseInt(retryMatch[1]) : 0;
-      
+
       // Use suggested delay or exponential backoff (10s, 20s, 40s)
       const delaySeconds = suggestedDelay || Math.pow(2, retryCount) * 10;
-      
+
       console.warn(`⏳ [${file.name}] Rate limit hit. Retrying in ${delaySeconds}s... (${retryCount + 1}/${maxRetries})`);
-      
+
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
-      
+
       // Retry recursively
       return analyzeImageContent(file, retryCount + 1);
     }
-    
-    console.error(`❌ [${file.name}] Analysis failed after ${elapsedTime}s:`, error);
+
+  console.error(`❌ [${file.name}] Analysis failed after ${elapsedTime}s:`, error);
     return 'Vehicle-Photo'; // Fallback name
   }
 };
@@ -442,7 +447,7 @@ export const retouchImage = async (
   onUpdate: (updatedImage: ImageFile) => void
 ) => {
   const model = 'gemini-2.5-flash-image';
-  
+
   onUpdate({ ...imageFile, status: 'retouching', error: 'Starting retouch...' });
 
   try {
@@ -465,21 +470,26 @@ export const retouchImage = async (
 
     if (resultPart && 'inlineData' in resultPart && resultPart.inlineData) {
       const { data: processedImageData, mimeType } = resultPart.inlineData;
+
+      if (typeof processedImageData !== 'string' || typeof mimeType !== 'string') {
+        throw new Error('Retouching failed: Invalid image payload received.');
+      }
+
       const newProcessedUrl = base64ToBlobUrl(processedImageData, mimeType);
-      
+
       // Clean up old blob URL if it exists
       if (imageFile.processedUrl && imageFile.processedUrl.startsWith('blob:')) {
         URL.revokeObjectURL(imageFile.processedUrl);
       }
-      
+
       onUpdate({ ...imageFile, status: 'completed', processedUrl: newProcessedUrl, error: null });
     } else {
        throw new Error(apiResponse.text?.trim() || 'Retouching failed: No image data returned.');
     }
 
-  } catch (e: any) {
-    console.error(`Failed to retouch image ${imageFile.originalFile.name}:`, e);
-    const errorMessage = e?.message || 'An unknown error occurred during retouching.';
+  } catch (error: unknown) {
+    console.error(`Failed to retouch image ${imageFile.originalFile.name}:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during retouching.';
     onUpdate({ ...imageFile, status: 'failed', error: errorMessage });
   }
 };
@@ -491,6 +501,7 @@ export const processImageBatch = async (
   dealershipBackground?: DealershipBackground
 ) => {
   const model = 'gemini-2.5-flash-image';
+  const basePrompt = generateConsistentPrompt(dealershipBackground);
 
   // Set initial status to 'queued' for better UI feedback
   imageFiles.forEach(img => {
@@ -503,19 +514,19 @@ export const processImageBatch = async (
   const MAX_CONCURRENT = 3; // Process 3 images simultaneously
   const RATE_LIMIT_RPM = 15; // Gemini free tier: 15 requests per minute
   const MIN_DELAY_MS = (60 / RATE_LIMIT_RPM) * 1000; // 4000ms = 4 seconds
-  
+
   // Track request timing to enforce rate limits
   const requestTimestamps: number[] = [];
-  
+
   const waitForRateLimit = async () => {
     const now = Date.now();
     const oneMinuteAgo = now - 60000;
-    
+
     // Remove timestamps older than 1 minute
     while (requestTimestamps.length > 0 && requestTimestamps[0]! < oneMinuteAgo) {
       requestTimestamps.shift();
     }
-    
+
     // If we've hit the rate limit, wait until the oldest request expires
     if (requestTimestamps.length >= RATE_LIMIT_RPM) {
       const oldestRequest = requestTimestamps[0]!;
@@ -524,7 +535,7 @@ export const processImageBatch = async (
         await new Promise(resolve => setTimeout(resolve, waitTime + 100)); // +100ms buffer
       }
     }
-    
+
     // Ensure minimum delay between requests
     if (requestTimestamps.length > 0) {
       const lastRequest = requestTimestamps[requestTimestamps.length - 1]!;
@@ -533,7 +544,7 @@ export const processImageBatch = async (
         await new Promise(resolve => setTimeout(resolve, MIN_DELAY_MS - timeSinceLastRequest));
       }
     }
-    
+
     requestTimestamps.push(Date.now());
   };
 
@@ -562,43 +573,32 @@ export const processImageBatch = async (
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
+
       onUpdate({ ...imageFile, status: 'processing', error: attempt > 0 ? `Retrying (attempt ${attempt + 1})...` : null });
-      
+
       try {
         // Wait for rate limit before making API call
         await waitForRateLimit();
-        
-        const promptWithFilenameRequest = `${prompt}
 
-**CRITICAL - OUTPUT FORMAT:**
-After processing the image, you MUST also output ONLY a short filename on a single line.
+        const promptWithFilenameRequest = `${basePrompt}
 
-FILENAME REQUIREMENTS:
-- OUTPUT FORMAT: Just the filename, nothing else. NO sentences, NO descriptions, NO extra words.
-- CORRECT: "Front-Quarter-Driver-Side"
-- WRONG: "This looks like a pretty standard red minivan. Front-Quarter-Driver-Side"
-- WRONG: "The image shows the interior... Interior-Second-Row-Passenger-Side-Open"
-- Use hyphens between words (e.g., "Front-Quarter-Passenger-Side")
-- Be specific about the part or angle shown
-- Keep it under 50 characters
-- Use professional automotive terminology
+**MANDATORY TEXT RESPONSE FORMAT (RETURN ONE LINE ONLY):**
+After you finish generating the enhanced image, respond with a separate text modality containing exactly one line in this format:
+FILENAME: <Professional-Hyphenated-Name>
 
-EXAMPLES OF CORRECT OUTPUT:
-- "Front-Quarter-View"
-- "Interior-Dashboard"
-- "Rear-Driver-Side-View"
-- "Engine-Bay-V8"
-- "Trunk-Cargo-Open"
-- "Interior-Second-Row-Passenger-Side"
-
-REMINDER: Output ONLY the filename. Do NOT include any description or explanation before the filename.`;
+Formatting rules:
+- Replace spaces with hyphens and capitalize each significant word (e.g., "Front-Quarter-Driver-Side").
+- Keep the filename under 50 characters.
+- No additional words, sentences, punctuation, JSON, quotes, or explanations.
+- The text modality must contain nothing except that single FILENAME: line.`;
 
         const carImagePart = await fileToGenerativePart(imageFile.originalFile);
-        
-        // Build the parts array - include background if provided
-        const parts: any[] = [carImagePart, { text: promptWithFilenameRequest }];
-        
+
+        const parts: GenerativeContentPart[] = [
+          carImagePart,
+          { text: promptWithFilenameRequest },
+        ];
+
         if (dealershipBackground) {
           const backgroundPart = await fileToGenerativePart(dealershipBackground.file);
           parts.splice(1, 0, backgroundPart);
@@ -617,33 +617,48 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
 
         // Parse response parts - can include both image and text
         const responseParts = response.candidates?.[0]?.content?.parts || [];
-        
+
         for (const part of responseParts) {
           if ('inlineData' in part && part.inlineData) {
-            processedImageData = part.inlineData.data;
-            mimeType = part.inlineData.mimeType;
+            const { data, mimeType: inlineMimeType } = part.inlineData;
+            if (typeof data === 'string') {
+              processedImageData = data;
+            }
+            if (typeof inlineMimeType === 'string') {
+              mimeType = inlineMimeType;
+            }
           }
           if ('text' in part && part.text) {
             // Extract filename from text response
             let text = part.text.trim();
             console.log(`📝 [${imageFile.originalFile.name}] Raw AI text response: "${text}"`);
-            
-            // If AI returned a sentence with the filename at the end, extract just the filename
-            // Pattern: Look for the last hyphenated phrase (e.g., "Some description. Rear-Driver-Side-View")
-            const filenameMatch = text.match(/([A-Z][a-zA-Z0-9]*(?:-[A-Z][a-zA-Z0-9]*)+)(?:\s*$|"|\))/);
-            if (filenameMatch) {
-              text = filenameMatch[1]; // Use the matched filename
-              console.log(`🎯 [${imageFile.originalFile.name}] Extracted filename: "${text}"`);
+
+            const directiveMatch = text.match(/FILENAME\s*:\s*([A-Za-z0-9\-\s]+)/i);
+            if (directiveMatch) {
+              text = directiveMatch[1].trim();
+              console.log(`🎯 [${imageFile.originalFile.name}] Parsed filename directive: "${text}"`);
             }
-            
-            // Clean up the AI-generated name (remove quotes, extra spaces, etc.)
+
+            if (!directiveMatch) {
+              const fallbackMatch = text.match(/([A-Z][a-zA-Z0-9]*(?:-[A-Z][a-zA-Z0-9]*)+)(?:\s*$|"|\))/);
+              if (fallbackMatch) {
+                text = fallbackMatch[1];
+                console.log(`🎯 [${imageFile.originalFile.name}] Fallback filename extraction: "${text}"`);
+              }
+            }
+
             aiGeneratedName = text
-              .replace(/^["']|["']$/g, '')
+              .replace(/^['"]|['"]$/g, '')
+              .replace(/[^a-zA-Z0-9\s-]/g, '')
+              .trim()
               .replace(/\s+/g, '-')
-              .replace(/[^a-zA-Z0-9-]/g, '')
               .replace(/-+/g, '-')
               .replace(/^-|-$/g, '')
-              .substring(0, 50); // Limit length
+              .substring(0, 50);
+
+            if (aiGeneratedName && aiGeneratedName.length === 0) {
+              aiGeneratedName = null;
+            }
           }
         }
 
@@ -659,22 +674,22 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
 
           // Check pause state before marking complete
           if (pauseRef.current) {
-            onUpdate({ 
-              ...imageFile, 
-              status: 'paused', 
-              processedUrl: newProcessedUrl, 
+            onUpdate({
+              ...imageFile,
+              status: 'paused',
+              processedUrl: newProcessedUrl,
               aiGeneratedName: aiGeneratedName || imageFile.aiGeneratedName,
-              error: 'Queue is paused.' 
+              error: 'Queue is paused.'
             });
             continue;
           }
 
-          onUpdate({ 
-            ...imageFile, 
-            status: 'completed', 
-            processedUrl: newProcessedUrl, 
+          onUpdate({
+            ...imageFile,
+            status: 'completed',
+            processedUrl: newProcessedUrl,
             aiGeneratedName: aiGeneratedName || imageFile.aiGeneratedName,
-            error: null 
+            error: null
           });
           processed = true;
         } else {
@@ -682,7 +697,7 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
           const finishReason = response.candidates?.[0]?.finishReason;
           let specificError = 'An unknown issue occurred.';
           let shouldRetry = false;
-          
+
           if (finishReason === 'SAFETY') {
             specificError = 'Image blocked for safety. Try a different photo.';
           } else if (finishReason === 'NO_IMAGE') {
@@ -696,30 +711,42 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
             specificError = 'No image data returned. Retrying...';
             shouldRetry = true;
           }
-          
+
           if (shouldRetry && attempt < maxAttempts - 1) {
             attempt++;
             await new Promise(resolve => setTimeout(resolve, 3000));
             continue;
           }
-          
+
           throw new Error(specificError);
         }
-      } catch (e: any) {
-        console.error(`Failed to process image ${imageFile.originalFile.name}:`, e);
+      } catch (error: unknown) {
+        console.error(`Failed to process image ${imageFile.originalFile.name}:`, error);
 
         let errorMessage = 'An unknown error occurred.';
         let isRateLimit = false;
         let isApiKeyInvalid = false;
 
-        const errorAsString = JSON.stringify(e);
-        const lowerError = errorAsString.toLowerCase();
+        const serialisedError = (() => {
+          if (typeof error === 'string') return error;
+          if (error instanceof Error) return `${error.name}: ${error.message}`;
+          try {
+            return JSON.stringify(error);
+          } catch {
+            return String(error);
+          }
+        })();
+
+        const lowerError = serialisedError.toLowerCase();
+        const structuredError = typeof error === 'object' && error !== null
+          ? (error as { error?: { code?: number; status?: string; message?: string } })
+          : undefined;
 
         isApiKeyInvalid =
           (lowerError.includes('api_key_invalid') && lowerError.includes('renew')) ||
-          (e?.error?.code === 400 &&
-           e?.error?.status === 'INVALID_ARGUMENT' &&
-           (lowerError.includes('api key') && lowerError.includes('renew')));
+          (structuredError?.error?.code === 400 &&
+           structuredError.error?.status === 'INVALID_ARGUMENT' &&
+           lowerError.includes('api key') && lowerError.includes('renew'));
 
         if (!isApiKeyInvalid) {
           isRateLimit = lowerError.includes('rate limit') ||
@@ -727,18 +754,18 @@ REMINDER: Output ONLY the filename. Do NOT include any description or explanatio
                         lowerError.includes('exceeded your current quota') ||
                         lowerError.includes('429') ||
                         (lowerError.includes('api') && lowerError.includes('expired') && !lowerError.includes('renew')) ||
-                        (e?.error?.code === 400 && lowerError.includes('invalid_argument') && !lowerError.includes('api key'));
+                        (structuredError?.error?.code === 400 && lowerError.includes('invalid_argument') && !lowerError.includes('api key'));
         }
 
-        const potentialMessage = e?.error?.message || e?.message;
+        const potentialMessage = structuredError?.error?.message || (error instanceof Error ? error.message : undefined);
         if (typeof potentialMessage === 'string' && potentialMessage) {
-            errorMessage = potentialMessage;
+          errorMessage = potentialMessage;
         } else if (isRateLimit) {
-            errorMessage = 'API rate limit reached. The queue will pause and retry.';
+          errorMessage = 'API rate limit reached. The queue will pause and retry.';
         } else if (isApiKeyInvalid) {
-            errorMessage = 'API key is invalid or expired. Please check your GEMINI_API_KEY in the .env.local file and regenerate it at https://aistudio.google.com/app/apikey';
+          errorMessage = 'API key is invalid or expired. Please check your GEMINI_API_KEY in the .env.local file and regenerate it at https://aistudio.google.com/app/apikey';
         } else {
-            errorMessage = 'An API error occurred. See console for details.';
+          errorMessage = 'An API error occurred. See console for details.';
         }
 
         if (isRateLimit && attempt < maxAttempts - 1) {
