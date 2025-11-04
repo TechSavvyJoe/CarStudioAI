@@ -142,11 +142,22 @@ const App = () => {
         localStorage.removeItem('batchHistory');
         localStorage.removeItem('apiPlan');
 
-        const [dbImages, dbHistory, dbBackground] = await Promise.all([
+        // Add timeout to prevent infinite loading
+        const loadPromise = Promise.all([
           getImages(),
           getHistory(),
           getDealershipBackground(),
         ]);
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Database load timeout')), 10000)
+        );
+
+        const [dbImages, dbHistory, dbBackground] = await Promise.race([
+          loadPromise,
+          timeoutPromise
+        ]) as [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+
         setImages(dbImages);
         setBatchHistory(dbHistory);
         setDealershipBackground(dbBackground);
@@ -672,7 +683,23 @@ const App = () => {
     return { total, completed, failed, pending };
   }, [images]);
 
-  if (authLoading || isLoading) {
+  // TEMP: Auth disabled for development
+  // if (authLoading || isLoading) {
+  //   return (
+  //     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+  //       <div className="text-center">
+  //         <Spinner className="w-12 h-12 text-blue-400 mx-auto" />
+  //         <p className="mt-4 text-lg">Loading your studio...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+  // if (!user) {
+  //   return <Login />;
+  // }
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
@@ -681,10 +708,6 @@ const App = () => {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return <Login />;
   }
 
   return (
