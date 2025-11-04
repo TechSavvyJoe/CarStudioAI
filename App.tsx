@@ -86,9 +86,10 @@ const App = () => {
   const [batchHistory, setBatchHistory] = useState<BatchHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [is360CameraOpen, setIs360CameraOpen] = useState(false);
-  const [selected360VehicleType, setSelected360VehicleType] = useState<VehicleType>('sedan');
+  const selected360VehicleType: VehicleType = 'sedan';
   const [currentImageIndex, setCurrentImageIndex] = useState<number | null>(null);
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [dealershipBackground, setDealershipBackground] = useState<DealershipBackground | null>(null);
@@ -97,11 +98,21 @@ const App = () => {
 
   const pauseRef = useRef(isPaused);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef<ImageFile[]>([]);
+  const backgroundUrlRef = useRef<string | null>(null);
 
 
   useEffect(() => {
     pauseRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  useEffect(() => {
+    backgroundUrlRef.current = dealershipBackground?.url ?? null;
+  }, [dealershipBackground]);
 
   useEffect(() => {
     const handler = () => setIsAdminOpen(true);
@@ -137,6 +148,7 @@ const App = () => {
     const loadData = async () => {
       try {
         setLoadError(null);
+        setLoadWarning(null);
         // For a clean migration, clear old localStorage keys if they exist
         localStorage.removeItem('imageList');
         localStorage.removeItem('batchHistory');
@@ -149,18 +161,38 @@ const App = () => {
           getDealershipBackground(),
         ]);
 
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database load timeout')), 10000)
-        );
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Database load timeout')), 10000);
+        });
 
-        const [dbImages, dbHistory, dbBackground] = await Promise.race([
-          loadPromise,
-          timeoutPromise
-        ]) as [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+        let loadResults: [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+
+        try {
+          loadResults = await Promise.race([
+            loadPromise,
+            timeoutPromise,
+          ]) as [ImageFile[], BatchHistoryEntry[], DealershipBackground | null];
+        } catch (raceError) {
+          if (raceError instanceof Error && raceError.message === 'Database load timeout') {
+            logger.warn('IndexedDB load exceeded 10 seconds, retrying without timeout');
+            setLoadWarning('Still loading your saved projects. This can take a bit longer when many images are saved.');
+            loadResults = await loadPromise;
+          } else {
+            throw raceError;
+          }
+        } finally {
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
+        }
+
+        const [dbImages, dbHistory, dbBackground] = loadResults;
 
         setImages(dbImages);
         setBatchHistory(dbHistory);
         setDealershipBackground(dbBackground);
+        setLoadWarning(null);
 
       } catch (error) {
         logger.error("Failed to load data from IndexedDB:", error);
@@ -182,12 +214,12 @@ const App = () => {
   // This prevents revoking URLs while they're still being used by the ImageViewer
   useEffect(() => {
     return () => {
-      images.forEach(image => {
+      imagesRef.current.forEach(image => {
         if (image.originalUrl) URL.revokeObjectURL(image.originalUrl);
         if (image.processedUrl) URL.revokeObjectURL(image.processedUrl);
       });
-      if (dealershipBackground?.url) {
-        URL.revokeObjectURL(dealershipBackground.url);
+      if (backgroundUrlRef.current) {
+        URL.revokeObjectURL(backgroundUrlRef.current);
       }
     };
   }, []);
@@ -720,6 +752,16 @@ const App = () => {
         processingCount={images.filter(img => img.status === 'processing' || img.status === 'queued').length}
         totalCount={images.length}
       />
+      {loadWarning && (
+        <div className="bg-amber-900/15 border-t border-b border-amber-500/60 px-4 py-3">
+          <div className="container mx-auto flex items-start gap-3">
+            <span className="mt-0.5 text-amber-300">⚠️</span>
+            <div>
+              <p className="text-sm text-amber-200">{loadWarning}</p>
+            </div>
+          </div>
+        </div>
+      )}
       {loadError && (
         <div className="bg-red-900/20 border-t-2 border-b-2 border-red-600 px-4 py-3">
           <div className="container mx-auto flex items-start gap-3">
