@@ -13,6 +13,13 @@ import type { VehicleType } from '../../types';
 import { GridGuide } from '../icons/guides/GridGuide';
 import { VEHICLE_TYPES } from './vehicleTypes';
 import { shutterSoundDataUrl } from '../../assets/shutterSound';
+import {
+  computeTiltFromMotion,
+  computeTiltFromOrientation,
+  isDeviceLevel,
+  smoothTilt,
+  type TiltReading,
+} from '../../utils/orientation';
 
 // Type for camera focus constraints (advanced property)
 type CameraFocusConstraint = {
@@ -120,11 +127,11 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
   const [previewingImageIndex, setPreviewingImageIndex] = useState<number | null>(null);
   const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
   const [shutterKey, setShutterKey] = useState(0);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 }); // Device tilt for level indicator
+  const [tilt, setTilt] = useState<TiltReading>({ roll: 0, pitch: 0 });
   const [showLevel, setShowLevel] = useState(() => {
     return localStorage.getItem('showLevel') !== 'false';
   });
-  
+
   // Safely validate vehicle type from localStorage
   const getValidVehicleType = (): VehicleType | null => {
     const stored = localStorage.getItem('vehicleType');
@@ -155,6 +162,11 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
   const focusIsSupported = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const filmstripRef = useRef<HTMLDivElement>(null);
+  const motionAvailableRef = useRef(false);
+  const levelIndicatorDotRef = useRef<HTMLDivElement>(null);
+  const focusIndicatorRef = useRef<HTMLDivElement>(null);
+  const guideOverlayWrapperRef = useRef<HTMLDivElement>(null);
+  const gridOverlayWrapperRef = useRef<HTMLDivElement>(null);
 
   const shutterSoundRef = useRef<HTMLAudioElement | null>(null);
 
@@ -187,38 +199,119 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
   useEffect(() => {
     if (!showLevel) return;
 
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      // beta: front-to-back tilt (-180 to 180), 0 is level
-      // gamma: left-to-right tilt (-90 to 90), 0 is level
-      const beta = event.beta || 0;
-      const gamma = event.gamma || 0;
-      
-      setTilt({ x: gamma, y: beta });
+    let rafId: number | null = null;
+    let isActive = true;
+
+    const updateTilt = (next: TiltReading) => {
+      if (!isActive) return;
+
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+
+      rafId = requestAnimationFrame(() => {
+        setTilt(prev => smoothTilt(prev, next, 0.25));
+      });
     };
 
-    // Request permission for iOS 13+
-    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-      (DeviceOrientationEvent as any).requestPermission()
-        .then((permissionState: string) => {
-          if (permissionState === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
+    const handleMotion = (event: DeviceMotionEvent) => {
+      motionAvailableRef.current = true;
+      updateTilt(computeTiltFromMotion(event.accelerationIncludingGravity));
+    };
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      if (motionAvailableRef.current) return;
+      updateTilt(computeTiltFromOrientation(event.beta, event.gamma));
+    };
+
+    const requestPermissions = async () => {
+      if (typeof DeviceOrientationEvent !== 'undefined') {
+        const { requestPermission } = DeviceOrientationEvent as unknown as {
+          requestPermission?: () => Promise<string>;
+        };
+
+        if (typeof requestPermission === 'function') {
+          try {
+            const status = await requestPermission();
+            if (status !== 'granted') {
+              logger.warn('Device orientation permission was not granted. Level indicator accuracy may be reduced.');
+            }
+          } catch (permissionError) {
+            logger.warn('Device orientation permission request failed', permissionError);
           }
-        })
-        .catch(logger.error);
-    } else {
-      // Non-iOS or older iOS
-      window.addEventListener('deviceorientation', handleOrientation);
-    }
+        }
+      }
+
+      if (typeof DeviceMotionEvent !== 'undefined') {
+        const { requestPermission } = DeviceMotionEvent as unknown as {
+          requestPermission?: () => Promise<string>;
+        };
+
+        if (typeof requestPermission === 'function') {
+          try {
+            const status = await requestPermission();
+            if (status !== 'granted') {
+              logger.warn('Device motion permission was not granted. Level indicator accuracy may be reduced.');
+            }
+          } catch (permissionError) {
+            logger.warn('Device motion permission request failed', permissionError);
+          }
+        }
+      }
+    };
+
+    requestPermissions().catch(error => logger.warn('Sensor permission request issue', error));
+
+    window.addEventListener('devicemotion', handleMotion);
+    window.addEventListener('deviceorientation', handleOrientation);
 
     return () => {
+      isActive = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener('devicemotion', handleMotion);
       window.removeEventListener('deviceorientation', handleOrientation);
     };
   }, [showLevel]);
 
   useEffect(() => {
+    const dot = levelIndicatorDotRef.current;
+    if (!dot) return;
+
+    const clampValue = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+    const rollOffset = clampValue(tilt.roll, -20, 20) * 1.4;
+    const pitchOffset = clampValue(tilt.pitch, -20, 20) * 1.4;
+
+    dot.style.transform = `translate(${rollOffset}px, ${pitchOffset}px)`;
+  }, [tilt]);
+
+  useEffect(() => {
+    if (!focusPoint) return;
+    const indicator = focusIndicatorRef.current;
+    if (!indicator) return;
+
+    indicator.style.left = `${focusPoint.x}px`;
+    indicator.style.top = `${focusPoint.y}px`;
+    indicator.style.transform = 'translate(-50%, -50%)';
+  }, [focusPoint]);
+
+  useEffect(() => {
+    const guideWrapper = guideOverlayWrapperRef.current;
+    if (!guideWrapper) return;
+    guideWrapper.style.opacity = streamStarted ? String(guideOpacity) : '0';
+  }, [guideOpacity, streamStarted]);
+
+  useEffect(() => {
+    const gridWrapper = gridOverlayWrapperRef.current;
+    if (!gridWrapper) return;
+    gridWrapper.style.opacity = streamStarted ? '0.3' : '0';
+  }, [streamStarted, showGrid]);
+
+  useEffect(() => {
     localStorage.setItem('showGuides', String(showGuides));
   }, [showGuides]);
-  
+
   useEffect(() => {
     localStorage.setItem('showGrid', String(showGrid));
   }, [showGrid]);
@@ -236,19 +329,20 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
         localStorage.setItem('vehicleType', vehicleType);
     }
   }, [vehicleType]);
-  
+
   const handleInitialSelect = (type: VehicleType) => {
     setVehicleType(type);
     setInitialSelectionDone(true);
   };
-  
-  const capturedShotNames = useMemo(() => 
+
+  const capturedShotNames = useMemo(() =>
     new Set(capturedImages.map(c => c.shotName))
   , [capturedImages]);
 
   const currentShot = SHOT_LIST[currentShotIndex];
   const GuideOverlay = currentShot.overlay;
-  
+  const isLevelAligned = isDeviceLevel(tilt, { rollThreshold: 2.5, pitchThreshold: 3.5 });
+
   useEffect(() => {
       const activeItem = filmstripRef.current?.children[currentShotIndex] as HTMLElement;
       if (activeItem) {
@@ -408,7 +502,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
         const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
         setCapturedImages(prev => [...prev, { dataUrl, shotName: currentShot.name }]);
         // Move to the next un-captured shot
-        const nextUncapturedIndex = SHOT_LIST.findIndex((shot, index) => 
+        const nextUncapturedIndex = SHOT_LIST.findIndex((shot, index) =>
             index > currentShotIndex && !capturedShotNames.has(shot.name));
         const nextIndex = nextUncapturedIndex !== -1 ? nextUncapturedIndex : SHOT_LIST.findIndex(s => !capturedShotNames.has(s.name));
         setCurrentShotIndex(nextIndex !== -1 ? nextIndex : (currentShotIndex + 1) % SHOT_LIST.length);
@@ -464,14 +558,23 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
       logger.error('Error during capture completion:', error);
     }
   }, [capturedImages, onCaptureComplete]);
-  
+
   useEffect(() => {
     if (initialSelectionDone) {
       startStream();
     }
+
+    const videoElement = videoRef.current;
+
     return () => {
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      const currentStream = (videoElement?.srcObject as MediaStream | null) ?? null;
+
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
+      if (videoElement) {
+        videoElement.srcObject = null;
       }
     };
   }, [startStream, initialSelectionDone]);
@@ -485,9 +588,9 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
     <div ref={containerRef} className="fixed inset-0 z-40 bg-black text-white flex flex-col items-center justify-center animate-fadeIn">
       {/* Hidden canvas for taking pictures */}
       <canvas ref={canvasRef} className="hidden" />
-      
+
       {/* Main Video and Overlays */}
-      <div 
+      <div
         className="relative w-full h-full flex items-center justify-center overflow-hidden"
         onClick={handleFocus}
       >
@@ -499,7 +602,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
           muted
           onCanPlay={handleCanPlay}
         />
-        
+
         {/* Loading / Error States */}
         {(isLoading || error) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-4">
@@ -510,60 +613,62 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
 
         {/* Guides Overlay */}
         {showGuides && vehicleType && (
-          <GuideOverlay
-            vehicleType={vehicleType}
-            category={currentShot.category}
+          <div
+            ref={guideOverlayWrapperRef}
             className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300"
-            style={{ opacity: streamStarted ? guideOpacity : 0 }}
-          />
+          >
+            <GuideOverlay
+              vehicleType={vehicleType}
+              category={currentShot.category}
+              className="h-full w-full"
+            />
+          </div>
         )}
         {showGrid && (
-            <GridGuide
-                className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300"
-                style={{ opacity: streamStarted ? 0.3 : 0 }}
-            />
+          <div
+            ref={gridOverlayWrapperRef}
+            className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300"
+          >
+            <GridGuide className="h-full w-full" />
+          </div>
         )}
 
-        {/* Level Indicator - Subtle horizontal line that tilts with device */}
+        {/* Level Indicator */}
         {showLevel && streamStarted && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-            {/* Horizontal reference line (fixed) */}
-            <div className="absolute left-1/2 top-0 transform -translate-x-1/2">
-              <div className="w-32 h-0.5 bg-white/20"></div>
-            </div>
-            
-            {/* Active level line (tilts with device) */}
-            <div 
-              className="absolute left-1/2 top-0 transform -translate-x-1/2 transition-transform duration-100"
-              style={{ transform: `translateX(-50%) rotate(${-tilt.x}deg)` }}
-            >
-              <div className={`w-32 h-1 rounded-full transition-colors duration-200 ${
-                Math.abs(tilt.x) < 2 && Math.abs(tilt.y - 90) < 5 
-                  ? 'bg-green-400 shadow-lg shadow-green-400/50' 
-                  : 'bg-yellow-400/80'
-              }`}>
-                {/* Center dot */}
-                <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className={`relative flex h-28 w-28 items-center justify-center rounded-full border-2 ${
+                  isLevelAligned ? 'border-emerald-400/80' : 'border-yellow-300/70'
+                } bg-black/40 backdrop-blur-sm transition-colors duration-200`}
+              >
+                <div className="absolute inset-4 rounded-full border border-white/15" />
+                <div
+                  ref={levelIndicatorDotRef}
+                  className={`h-3 w-3 rounded-full transition-colors duration-200 ${
+                    isLevelAligned
+                      ? 'bg-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]'
+                      : 'bg-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.5)]'
+                  }`}
+                />
+              </div>
+              <div className="flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white/80">
+                <span>{`${tilt.roll >= 0 ? '↷' : '↶'} ${Math.abs(tilt.roll).toFixed(1)}°`}</span>
+                <span className="text-white/30">|</span>
+                <span>{`${tilt.pitch >= 0 ? '↑' : '↓'} ${Math.abs(tilt.pitch).toFixed(1)}°`}</span>
               </div>
             </div>
-            
-            {/* Level indicator - shows degrees when not level */}
-            {Math.abs(tilt.x) >= 2 && (
-              <div className="absolute left-1/2 top-6 transform -translate-x-1/2 text-xs text-white/70 bg-black/50 px-2 py-0.5 rounded">
-                {tilt.x > 0 ? '→' : '←'} {Math.abs(tilt.x).toFixed(1)}°
-              </div>
-            )}
           </div>
         )}
 
         {/* Tap-to-focus animation */}
         {focusPoint && (
           <div
+            ref={focusIndicatorRef}
             className="absolute border-2 border-yellow-400 w-16 h-16 rounded-full animate-focus pointer-events-none"
-            style={{ top: `${focusPoint.y}px`, left: `${focusPoint.x}px`, transform: 'translate(-50%, -50%)' }}
           />
         )}
-        
+
         {/* Shutter visual effect */}
         <div key={shutterKey} className="absolute inset-0 rounded-full animate-shutter-burst pointer-events-none" />
       </div>
@@ -590,7 +695,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
           <AdjustmentsIcon className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
       </div>
-      
+
       {/* Guide Settings Panel */}
       {isGuideSettingsOpen && (
         <div className="absolute top-20 right-4 z-20 w-64 bg-gray-800/80 border border-gray-700 rounded-lg p-4 backdrop-blur-md animate-fadeIn">
@@ -703,7 +808,7 @@ export const CameraCapture = ({ onClose, onCaptureComplete }: CameraCaptureProps
               );
             })}
         </div>
-        
+
         {/* Controls Row */}
         <div className="flex items-center justify-between w-full px-4 mt-2 sm:mt-3">
             {/* Left: Camera Switch */}
