@@ -161,10 +161,11 @@ export async function deleteHistoryEntry(id: string): Promise<void> {
 }
 
 // Re-export other functions from IndexedDB utils with original names
-export const saveImages = IndexedDBUtils.saveImages;
-export const getImages = IndexedDBUtils.getImages;
-export const clearImages = IndexedDBUtils.clearImages;
-
-export const saveDealershipBackground = IndexedDBUtils.saveDealershipBackground;
-export const getDealershipBackground = IndexedDBUtils.getDealershipBackground;
-export const clearDealershipBackground = IndexedDBUtils.clearDealershipBackground;
+export const {
+  saveImages,
+  getImages,
+  clearImages,
+  saveDealershipBackground,
+  getDealershipBackground,
+  clearDealershipBackground,
+} = IndexedDBUtils;

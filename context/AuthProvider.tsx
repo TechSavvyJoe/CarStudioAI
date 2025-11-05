@@ -26,8 +26,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) setUser(null);
         } else if (session) {
           logger.log('[AuthProvider] Session found, fetching profile for user:', session.user.id);
+          // ...existing code...
           try {
-            const profile = await getProfileById(session.user.id, session.user.email);
+            const profile = await getProfileById(session.user.id, session.user.email ?? null);
             logger.log('[AuthProvider] Profile fetched:', profile);
             if (mounted) setUser(profile);
           } catch (profileErr) {
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (session) {
           logger.log('[AuthProvider] Fetching profile after auth change...');
-          const profile = await getProfileById(session.user.id, session.user.email);
+          const profile = await getProfileById(session.user.id, session.user.email ?? null);
           logger.log('[AuthProvider] Profile after auth change:', profile);
           setUser(profile);
         } else {

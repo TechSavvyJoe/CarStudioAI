@@ -195,7 +195,7 @@ export async function getProfile(): Promise<UserProfile | null> {
       return null;
     }
 
-    return getProfileById(session.user.id, session.user.email);
+    return getProfileById(session.user.id, session.user.email ?? null);
   } catch (err) {
     logger.error('[Auth] getProfile: Caught exception:', err);
     throw err;
